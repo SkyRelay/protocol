@@ -25,6 +25,7 @@ An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS
 - [Quorum](#quorum)
 - [Pass tracks](#pass-tracks)
 - [The on-chain verifier](#the-on-chain-verifier)
+- [BSC composability](#bsc-composability)
 - [Bonds and equivocation](#bonds-and-equivocation)
 - [Governance](#governance)
 - [Running it against a real terminal](#running-it-against-a-real-terminal)
@@ -249,6 +250,17 @@ function hashAttestation(SkyRelayAttestation calldata att, uint256 chainId, addr
     public view returns (bytes32);
 
 function domainSeparator() public view returns (bytes32);
+
+function beaconCountInWindow(address operator, uint64 fromTs, uint64 toTs)
+    external view returns (uint256);
+
+function submitRelayClaim(
+    uint256 beaconId, bytes32 relayedTxRoot, uint32 txCount,
+    uint64 timestamp, bytes calldata signature
+) external;
+
+function wasClaimedSpaceRelayed(bytes32 txHash, uint256 beaconId, bytes32[] calldata proof)
+    external view returns (bool claimed, address attester, uint64 claimedAt, uint32 noradId);
 ```
 
 One entry point takes a set. A single-attester deployment is the degenerate case where the set has one member, so there is one code path to audit rather than two.
@@ -263,7 +275,7 @@ The contract never computes an orbit. SGP4, the boresight match and the ASN look
 
 Signature malleability is deliberately not screened. The replay key is the digest, not the signature, so a flipped `s` produces the same digest and reverts on `Replay` anyway.
 
-The EIP-712 type string is unchanged. Every committed digest in `vectors/eip712/attestations.json` still verifies.
+The EIP-712 type string is unchanged. Every committed digest in `vectors/eip712/attestations.json` still verifies. Relay claims use a separate type, `SkyRelayRelayClaim`; nothing is added to `SkyRelayAttestation`.
 
 Deploy:
 
@@ -272,6 +284,23 @@ cd contracts && OWNER=0x... ATTESTER=0x... ORBITAL_VAULT=0x... forge script scri
 ```
 
 `MIN_BOND` (default 1 BNB), `UNBONDING_PERIOD` (default 7 days) and `REPORTER_BOUNTY_BPS` (default 1000 = 10 %) are read from the environment with those defaults. `foundry.toml` already carries `bsc` and `chapel` RPC aliases.
+
+## BSC composability
+
+Other contracts on BSC consume the ledger through `ISkyRelay`. They read; they do not write beacons.
+
+```solidity
+import {ISkyRelay} from "src/interfaces/ISkyRelay.sol";
+
+ISkyRelay public immutable relay;                 // the deployed SkyRelayBeacon
+uint256 n = relay.beaconCountInWindow(operator, fromTs, toTs);
+```
+
+`beaconCountInWindow` sums UTC-day buckets of verified sightings, using the attestation timestamp (when the sighting happened), inclusive of both ends, and reverts if the span exceeds 366 days.
+
+`MockCoverageEscrow` (`contracts/test/mock/`) is the worked example. A funder locks BNB for an operator and a window; after `toTs` the operator collects only if that count meets `minBeacons`, otherwise the funder refunds. It is a demonstration, not a product.
+
+An operator whose terminal relayed BSC transactions during a pass can say so, with `submitRelayClaim`. The chain verifies the *sighting* and the *signature*, and takes the operator's word for the routing. A transaction hash carries no route information. `wasClaimedSpaceRelayed` returning true means a bonded attester signed a statement that this transaction was relayed during a sighting the chain verified geometrically.
 
 ## Bonds and equivocation
 
@@ -362,11 +391,12 @@ Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 5
 
 ## Repository map
 
-About 3 050 lines of source, no runtime dependencies.
+About 3 230 lines of source, no runtime dependencies.
 
 | Path | Lines | What it does |
 |---|---|---|
-| `contracts/src/SkyRelayBeacon.sol` | 439 | Quorum verifier, attester registry, timelocked governance |
+| `contracts/src/SkyRelayBeacon.sol` | 584 | Quorum verifier, windowed counts, relay claims, attester registry |
+| `contracts/src/interfaces/ISkyRelay.sol` | 37 | Read-only ABI other BSC contracts import |
 | `contracts/src/SkyRelayBond.sol` | 190 | Native-BNB bonds, equivocation slash |
 | `contracts/src/CatalogRegistry.sol` | 91 | `catalogHash` → locator; `isRegistered` |
 | `packages/core/src/orbit/sgp4.ts` | 327 | Near-earth SGP4 initialiser and propagator, TEME output |
@@ -390,7 +420,7 @@ About 3 050 lines of source, no runtime dependencies.
 
 ## Tests
 
-**58 TypeScript** (`node:test`) and **64 Solidity** (Foundry, across five suites, including fuzz).
+**58 TypeScript** (`node:test`) and **89 Solidity** (Foundry, across six suites, including fuzz).
 
 The ones that carry weight:
 
@@ -419,6 +449,10 @@ The ones that carry weight:
 | `test_genuineEquivocationSlashesPaysAndEjects` | a self-contradiction about one station-second going unpunished |
 | `test_quorumOfThreeStationsAtOneInstantDoesNotSlash` | treating a quorum as equivocation and slashing honest members |
 | `test_registeringTheSameHashTwiceReverts` | a catalog hash being silently retargeted |
+| `test_beaconCountInWindowBoundariesAreInclusive` | a window query dropping the endpoint days |
+| `test_relayClaimFromBondedNonSignerReverts` | a stranger attaching a claim to someone else's sighting |
+| `test_wasClaimedSpaceRelayedTrueAndFalseReturnTheAttester` | treating a routing claim as a proof, or hiding whose word it is |
+| `test_coverageEscrowPaysWhenWindowIsFilled` / `…RefundsWhenWindowClosesShort` | a consumer that cannot actually read the ledger |
 
 ## What this proves / does not prove
 
@@ -426,7 +460,7 @@ The ones that carry weight:
 
 **The one geometric binding:** a capture is only attested if some satellite in the public catalog was actually where the terminal says it was pointing, at the second the attestation commits to — and the attestation names, by hash, the element set that claim was computed from, a hash the registry must already hold.
 
-**Does not prove:** that a given JSON was signed by SpaceX silicon; that the operator was physically at the station it declares; that the numbers in a never-contradicted attestation are true; that BSC validators live in orbit; affiliation with SpaceX/Starlink.
+**Does not prove:** that a given JSON was signed by SpaceX silicon; that the operator was physically at the station it declares; that the numbers in a never-contradicted attestation are true; that a transaction took a satellite path; that BSC validators live in orbit; affiliation with SpaceX/Starlink.
 
 ## Known limits
 
@@ -440,6 +474,7 @@ The ones that carry weight:
 - **`usedDigest` grows without bound** — one permanent storage slot per beacon, load-bearing only for the 120 s TTL.
 - **`totalEnergy` is a placeholder.** Summing SNR in millidB is not a physical energy and should not be used as a reward basis as-is.
 - **The fixtures are synthetic.** The dish payloads are schema-faithful reconstructions; only the geometry is real. `vectors/README.md` says exactly which parts are which.
+- **A relay claim is the attester's word about routing.** The chain verifies the sighting and the signature. It cannot tell whether any transaction took a satellite path; a tx hash carries no route information.
 
 ## What would make this stronger
 
@@ -464,6 +499,8 @@ Landed since the first release: the catalog commitment, the quorum mechanism (th
 **Does the quorum make it trustless?** No. It makes an attacker compromise k keys and lock k bonds instead of one, and stops a dishonest minority. It says nothing about whether those k keys belong to k people — see [Known limits](#known-limits).
 
 **Does bonding make the numbers true?** No. It makes keys expensive to use, and it makes one kind of lie (contradicting yourself about one station-second) slashable. A consistent physics lie from a bonded station is still a signature the contract accepts.
+
+**Does a relay claim mean the transaction went through Starlink?** No. It means a bonded attester who signed that sighting asserted that it did. The chain verifies the sighting and the signature. The routing is their word.
 
 **Why implement SGP4 and Keccak from scratch instead of using a library?** For Keccak, so the digest the pipeline produces can be *compared* against solc rather than trusted — two implementations sharing a dependency prove nothing. For SGP4, so the WGS-72 constants, the frame conversions and the error budget are all visible and testable in one place. Both are pinned against external references.
 

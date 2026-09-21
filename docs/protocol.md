@@ -125,6 +125,17 @@ One entry point takes a set; a single-attester deployment is the degenerate case
 ```solidity
 function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata sigs)
     external payable returns (uint256 beaconId);
+
+function beaconCountInWindow(address operator, uint64 fromTs, uint64 toTs)
+    external view returns (uint256 count);
+
+function submitRelayClaim(
+    uint256 beaconId, bytes32 relayedTxRoot, uint32 txCount,
+    uint64 timestamp, bytes calldata signature
+) external;
+
+function wasClaimedSpaceRelayed(bytes32 txHash, uint256 beaconId, bytes32[] calldata proof)
+    external view returns (bool claimed, address attester, uint64 claimedAt, uint32 noradId);
 ```
 
 1. not paused
@@ -136,7 +147,7 @@ function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata s
 7. each digest unused, then marked used
 8. each signature recovers to a **registered** attester whose bond `isActive`, and signers are pairwise distinct
 9. `msg.sender` is one of the operators
-10. record: one beacon, one `StationReport` per member, `msg.value` forwarded to `orbitalVault`
+10. record: one beacon, one `BeaconSummary`, one `StationReport` per member, day-bucket and signer-set writes, `msg.value` forwarded to `orbitalVault`
 
 `isAttester` is still required. Bonding is necessary but not sufficient: anyone can lock BNB, and that must not admit them to the set. The owner still decides who is in.
 
@@ -145,6 +156,26 @@ Signature malleability is not screened, and does not need to be: the replay key 
 The contract never computes an orbit. SGP4, the boresight match and the ASN lookup are all off-chain; what it verifies is that *k* registered, bonded keys signed attestations describing the same sighting against a registered catalog.
 
 The EIP-712 type string is unchanged. Storage, events and measured gas: [`onchain.md`](onchain.md).
+
+### Windowed counts
+
+`userBeaconCount` is a lifetime total. A consumer that needs "did this operator produce N verified sightings between T1 and T2" asks `beaconCountInWindow`, which sums `beaconsByDay[operator][timestamp / 86400]` from `fromTs` to `toTs` inclusive. The bucket is the attestation timestamp — when the sighting happened — not `block.timestamp`. The loop is bounded: a span of more than 366 day-buckets reverts `WindowTooLong`. Gas is roughly one SLOAD per day.
+
+### Relay claims
+
+An operator whose terminal relayed BSC transactions during a pass can say so, with a **separate** EIP-712 type:
+
+```
+SkyRelayRelayClaim(uint256 beaconId,bytes32 relayedTxRoot,uint32 txCount,uint64 timestamp)
+```
+
+Nothing is added to `SkyRelayAttestation`. The chain cannot verify that any transaction took a satellite path — a tx hash carries no route information. What it can do is bind the assertion to a sighting it *did* verify, to a signer who was in that beacon's attester set, and to a bond that can be taken.
+
+`wasClaimedSpaceRelayed` checks a sorted-pair Merkle inclusion proof against the stored root. `claimed` being true means exactly: a bonded attester signed a statement that this transaction was relayed during a sighting the chain verified geometrically. The routing is the attester's word.
+
+### `ISkyRelay`
+
+The ABI an external contract imports is views only: `totalBeacons`, `getBeacon`, `beaconCountInWindow`, `wasClaimedSpaceRelayed`. `SkyRelayBeacon` declares `is ISkyRelay`. `MockCoverageEscrow` is the worked example of a consumer; it is a demonstration, not a product.
 
 ## Bonds and equivocation
 

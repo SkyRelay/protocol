@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {ISkyRelay} from "./interfaces/ISkyRelay.sol";
+
 interface ICatalogRegistry {
     function isRegistered(bytes32 catalogHash) external view returns (bool);
 }
@@ -34,7 +36,11 @@ interface ISkyRelayBond {
 ///
 /// This contract does not own the registry or the bond. Both are immutable
 /// addresses so either can be replaced by deploying a new beacon.
-contract SkyRelayBeacon {
+///
+/// A relay claim is a bonded assertion, not a routing proof. The chain
+/// verifies the sighting and the signature, and takes the operator's word
+/// for the routing. A transaction hash carries no route information.
+contract SkyRelayBeacon is ISkyRelay {
     uint32 public constant SPACEX_ASN = 14593;
     uint32 public constant STARLINK_ID_ASN = 45700;
     uint64 public constant ATTESTATION_TTL = 120;
@@ -46,9 +52,16 @@ contract SkyRelayBeacon {
     /// @notice Bounds the O(n^2) distinctness scan in `verifyAndRecord`.
     uint256 public constant MAX_QUORUM = 16;
 
+    /// @notice Inclusive day-bucket cap for `beaconCountInWindow`. One SLOAD per day.
+    uint256 public constant MAX_WINDOW_DAYS = 366;
+
     bytes32 public constant ATTESTATION_TYPEHASH = keccak256(
         "SkyRelayAttestation(address operator,bytes32 telemetryHash,bytes32 catalogHash,uint32 noradId,int32 elevationMilliDeg,int32 dopplerHz,uint32 snrMilliDb,uint32 asn,uint64 timestamp)"
     );
+    /// @dev Separate type. Adding fields to SkyRelayAttestation would move every
+    ///      committed digest in vectors/eip712/attestations.json.
+    bytes32 public constant RELAY_CLAIM_TYPEHASH =
+        keccak256("SkyRelayRelayClaim(uint256 beaconId,bytes32 relayedTxRoot,uint32 txCount,uint64 timestamp)");
     bytes32 public constant DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
@@ -90,6 +103,22 @@ contract SkyRelayBeacon {
     mapping(address => uint256) public userBeaconCount;
     mapping(bytes32 => bool) public usedDigest;
 
+    /// @notice operator => UTC day (attestation timestamp / 86400) => count.
+    mapping(address => mapping(uint32 => uint32)) public beaconsByDay;
+    mapping(uint256 => BeaconSummary) private _summaries;
+    /// @notice Attesters whose signature was accepted for this beacon.
+    mapping(uint256 => mapping(address => bool)) public beaconSignedBy;
+
+    struct StoredRelayClaim {
+        bytes32 relayedTxRoot;
+        uint64 claimedAt;
+        uint32 txCount;
+        bool exists;
+    }
+
+    mapping(uint256 => mapping(address => StoredRelayClaim)) private _relayClaims;
+    mapping(uint256 => address[]) private _claimers;
+
     struct SkyRelayAttestation {
         /// @notice A station operator; one of them must be `msg.sender`.
         /// @dev Without this the digest says nothing about who broadcasts the
@@ -128,6 +157,9 @@ contract SkyRelayBeacon {
         bytes32 digest
     );
     event VaultDeposit(address indexed from, uint256 amount);
+    event RelayClaimed(
+        uint256 indexed beaconId, address indexed attester, bytes32 relayedTxRoot, uint32 txCount, uint64 timestamp
+    );
 
     event OwnershipTransferStarted(address indexed from, address indexed to);
     event OwnershipTransferred(address indexed from, address indexed to);
@@ -165,6 +197,11 @@ contract SkyRelayBeacon {
     error VaultTransfer();
     error UnregisteredCatalog();
     error NotBonded();
+    error BadWindow();
+    error WindowTooLong();
+    error UnknownBeacon();
+    error NotBeaconSigner();
+    error AlreadyClaimed();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -358,10 +395,12 @@ contract SkyRelayBeacon {
                 if (signers[j] == signer) revert DuplicateSigner();
             }
             signers[i] = signer;
+            beaconSignedBy[beaconId][signer] = true;
 
             if (att.operator == msg.sender) senderIsOperator = true;
 
             userBeaconCount[att.operator] += 1;
+            beaconsByDay[att.operator][uint32(att.timestamp / 86400)] += 1;
             totalEnergy += att.snrMilliDb;
 
             emit StationReport(
@@ -379,6 +418,13 @@ contract SkyRelayBeacon {
         if (!senderIsOperator) revert WrongOperator();
 
         totalBeacons = beaconId;
+        _summaries[beaconId] = BeaconSummary({
+            noradId: first.noradId,
+            timestamp: first.timestamp,
+            catalogHash: first.catalogHash,
+            quorum: uint8(n),
+            submitter: msg.sender
+        });
 
         if (msg.value > 0) {
             (bool ok,) = orbitalVault.call{value: msg.value}("");
@@ -387,6 +433,90 @@ contract SkyRelayBeacon {
         }
 
         emit BeaconBroadcast(beaconId, first.noradId, msg.sender, first.timestamp, first.catalogHash, n);
+    }
+
+    function getBeacon(uint256 beaconId) external view returns (BeaconSummary memory) {
+        if (beaconId == 0 || beaconId > totalBeacons) revert UnknownBeacon();
+        return _summaries[beaconId];
+    }
+
+    /// @notice Sum of verified sightings for `operator` whose attestation
+    ///         timestamps fall in `[fromTs, toTs]`, bucketed by UTC day
+    ///         (`timestamp / 86400`). Inclusive of both endpoints.
+    /// @dev Roughly one SLOAD per day in the window. Reverts `WindowTooLong`
+    ///      if the inclusive day-bucket span exceeds 366.
+    function beaconCountInWindow(address operator, uint64 fromTs, uint64 toTs) external view returns (uint256 count) {
+        if (toTs < fromTs) revert BadWindow();
+        uint256 fromDay = uint256(fromTs / 86400);
+        uint256 toDay = uint256(toTs / 86400);
+        if (toDay - fromDay + 1 > MAX_WINDOW_DAYS) revert WindowTooLong();
+        for (uint256 d = fromDay; d <= toDay; d++) {
+            count += beaconsByDay[operator][uint32(d)];
+        }
+    }
+
+    /// @notice A bonded attester asserts that `txCount` transactions, committed
+    ///         as `relayedTxRoot`, were relayed during a previously verified sighting.
+    /// @dev The chain verifies the sighting and the signature, and takes the
+    ///      operator's word for the routing. A transaction hash carries no
+    ///      route information. One claim per `(beaconId, attester)`.
+    function submitRelayClaim(
+        uint256 beaconId,
+        bytes32 relayedTxRoot,
+        uint32 txCount,
+        uint64 timestamp,
+        bytes calldata signature
+    ) external {
+        if (beaconId == 0 || beaconId > totalBeacons) revert UnknownBeacon();
+        bytes32 digest = hashRelayClaim(beaconId, relayedTxRoot, txCount, timestamp);
+        address signer = _recover(digest, signature);
+        if (!bond.isActive(signer)) revert NotBonded();
+        if (!beaconSignedBy[beaconId][signer]) revert NotBeaconSigner();
+        StoredRelayClaim storage existing = _relayClaims[beaconId][signer];
+        if (existing.exists) revert AlreadyClaimed();
+        _relayClaims[beaconId][signer] =
+            StoredRelayClaim({relayedTxRoot: relayedTxRoot, claimedAt: timestamp, txCount: txCount, exists: true});
+        _claimers[beaconId].push(signer);
+        emit RelayClaimed(beaconId, signer, relayedTxRoot, txCount, timestamp);
+    }
+
+    /// @notice `claimed` being true means exactly: a bonded attester signed a
+    ///         statement that this transaction was relayed during a sighting the
+    ///         chain verified geometrically.
+    /// @dev Sorted-pair Merkle inclusion of `txHash` against a stored claim
+    ///      root. The chain does not verify that any transaction took a
+    ///      satellite path.
+    function wasClaimedSpaceRelayed(bytes32 txHash, uint256 beaconId, bytes32[] calldata proof)
+        external
+        view
+        returns (bool claimed, address attester, uint64 claimedAt, uint32 noradId)
+    {
+        if (beaconId == 0 || beaconId > totalBeacons) revert UnknownBeacon();
+        noradId = _summaries[beaconId].noradId;
+        address[] storage claimers = _claimers[beaconId];
+        uint256 n = claimers.length;
+        for (uint256 i = 0; i < n; i++) {
+            address who = claimers[i];
+            StoredRelayClaim storage c = _relayClaims[beaconId][who];
+            if (_merkleContains(txHash, proof, c.relayedTxRoot)) {
+                return (true, who, c.claimedAt, noradId);
+            }
+            if (i == 0) {
+                attester = who;
+                claimedAt = c.claimedAt;
+            }
+        }
+        return (false, attester, claimedAt, noradId);
+    }
+
+    /// @notice Hasher for the relay-claim type. Domain is this contract.
+    function hashRelayClaim(uint256 beaconId, bytes32 relayedTxRoot, uint32 txCount, uint64 timestamp)
+        public
+        view
+        returns (bytes32)
+    {
+        bytes32 structHash = keccak256(abi.encode(RELAY_CLAIM_TYPEHASH, beaconId, relayedTxRoot, txCount, timestamp));
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator(), structHash));
     }
 
     // ── internals ───────────────────────────────────────────────────────────
@@ -435,5 +565,20 @@ contract SkyRelayBeacon {
         address signer = ecrecover(digest, v, r, s);
         if (signer == address(0)) revert BadSignature();
         return signer;
+    }
+
+    /// @dev Ordinary sorted-pair Merkle: each step is keccak256 of the two
+    ///      32-byte words in ascending order. An empty proof is valid iff
+    ///      `leaf == root` (a one-transaction claim).
+    function _merkleContains(bytes32 leaf, bytes32[] calldata proof, bytes32 root) internal pure returns (bool) {
+        bytes32 h = leaf;
+        for (uint256 i = 0; i < proof.length; i++) {
+            h = _merkleHashPair(h, proof[i]);
+        }
+        return h == root;
+    }
+
+    function _merkleHashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
+        return a < b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
     }
 }
