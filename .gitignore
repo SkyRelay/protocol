@@ -1,0 +1,14 @@
+node_modules/
+dist/
+cache/
+broadcast/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+.idea/
+.vscode/
+contracts/out/
+contracts/cache/

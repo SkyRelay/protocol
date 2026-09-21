@@ -1,0 +1,36 @@
+{
+  "name": "skyrelay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SkyRelay: Starlink UT telemetry \u2192 physical features \u2192 EIP-712 \u2192 BSC beacon proof",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsx --test packages/core/test/*.test.ts",
+    "vectors": "tsx scripts/build-vectors.ts",
+    "verify": "tsx scripts/verify-pipeline.ts",
+    "prove": "tsx scripts/verify-pipeline.ts"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "homepage": "https://skyrelay.link",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SkyRelay/protocol.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SkyRelay/protocol/issues"
+  }
+}
