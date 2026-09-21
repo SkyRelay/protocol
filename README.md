@@ -25,6 +25,7 @@ An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS
 - [Quorum](#quorum)
 - [Pass tracks](#pass-tracks)
 - [The on-chain verifier](#the-on-chain-verifier)
+- [Bonds and equivocation](#bonds-and-equivocation)
 - [Governance](#governance)
 - [Running it against a real terminal](#running-it-against-a-real-terminal)
 - [Physics](#physics)
@@ -53,7 +54,7 @@ What makes a capture expensive to fabricate is the other two inputs, and neither
 - **The CelesTrak GP catalog** says where every Starlink satellite actually was. Anyone can fetch the same file and recompute the same geometry.
 - **The public ASN registry** says which network an egress IP really sits on.
 
-So a forged frame has to be simultaneously consistent with a real orbit, a real ground station, and a real instant in time. That is the whole of the physical binding, and it is genuinely non-trivial — but it is not hardware attestation, and the trust boundary in the diagram is real: everything on chain is the word of however many keys `quorumThreshold` demands.
+So a forged frame has to be simultaneously consistent with a real orbit, a real ground station, and a real instant in time. That is the whole of the physical binding, and it is genuinely non-trivial — but it is not hardware attestation, and the trust boundary in the diagram is real: everything on chain is the word of however many *bonded, registered* keys `quorumThreshold` demands. Those keys now cost `minBond` each. Two specific lies are provable on chain without computing an orbit: an attester contradicting itself about one station-second, and a sighting resolved against a catalog nobody registered. A bonded attester that never contradicts itself can still lie about the physics.
 
 ## Quickstart
 
@@ -72,7 +73,7 @@ Other entry points:
 
 ```bash
 pnpm typecheck        # tsc, zero errors
-pnpm test             # node:test unit suite, 45 tests
+pnpm test             # node:test unit suite, 58 tests
 pnpm run vectors      # regenerate vectors/frames + vectors/eip712/attestations.json
 cd contracts && forge test
 ```
@@ -165,6 +166,10 @@ So the attestation commits to it. `catalogHash` is `keccak256` over the element 
 
 A verifier can now re-fetch the archived CelesTrak elements for that epoch, recompute the hash, and recompute the geometry themselves. What this does *not* do is prove the committed catalog is the true one — it makes the choice auditable after the fact, not enforced at signing time.
 
+`CatalogRegistry` is the retrieval side of that commitment. `register(catalogHash, locator)` writes the hash once, with `locator` an opaque string (a BNB Greenfield object reference in practice, e.g. `gnfd://skyrelay-catalog/2026-09-20T2000Z.tle`). The contract does not parse the locator. The keccak hash is the commitment; the locator is only a hint about where to look. An object fetched from it that does not hash to `catalogHash` is the wrong object, and that check happens off chain. `verifyAndRecord` refuses an unregistered hash (`UnregisteredCatalog`).
+
+The registry moves the trust rather than removing it: a dishonest registrar can register a doctored catalog. What the hash prevents is substitution after the fact — once a hash is written, the entry is immutable.
+
 ## The attestation
 
 ```solidity
@@ -204,10 +209,10 @@ The three disagree on every number, and that is the point: they are hundreds of 
 
 **What a quorum is worth, precisely.** The off-chain check is the conjunction of independent per-station checks against one shared orbit, so it is not a stronger *mathematical* statement than one station makes. Its value is operational:
 
-- an attacker must compromise *k* independent keys instead of one;
+- an attacker must compromise *k* independent keys *and* lock *k* × `minBond` instead of one;
 - a dishonest minority cannot push through data the honest members contradict.
 
-It does **not** stop a single party who holds every key and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Reading "quorum" as "unforgeable" is reading too much into it.
+It does **not** stop a single party who holds every key, posts every bond, and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Reading "quorum" as "unforgeable" is reading too much into it.
 
 ## Pass tracks
 
@@ -234,7 +239,7 @@ This is **not** part of what the contract verifies, and it cannot be — the con
 
 ## The on-chain verifier
 
-`contracts/src/SkyRelayBeacon.sol`, 406 lines, no OpenZeppelin, no proxy.
+`contracts/src/SkyRelayBeacon.sol`, no OpenZeppelin, no proxy. It references two sibling contracts by immutable address and does not own them: `CatalogRegistry` and `SkyRelayBond`. Storage, events and measured gas: [`docs/onchain.md`](docs/onchain.md).
 
 ```solidity
 function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata sigs)
@@ -248,13 +253,17 @@ function domainSeparator() public view returns (bytes32);
 
 One entry point takes a set. A single-attester deployment is the degenerate case where the set has one member, so there is one code path to audit rather than two.
 
-`verifyAndRecord` applies, in order: not paused → lengths match, non-empty, at least `quorumThreshold`, at most 16 → TTL on the shared timestamp → then per member: agreement on `noradId`/`timestamp`/`catalogHash`, ASN allow-set, `elevationMilliDeg > 0`, operators pairwise distinct, digest unused, signature recovers to a **registered** attester, signers pairwise distinct → finally `msg.sender` must be one of the operators. It records one beacon, one `StationReport` per member, credits every operator, and forwards any `msg.value` to the immutable `orbitalVault` or reverts.
+`verifyAndRecord` applies, in order: not paused → lengths match, non-empty, at least `quorumThreshold`, at most 16 → TTL on the shared timestamp → then per member: agreement on `noradId`/`timestamp`/`catalogHash`, ASN allow-set, `elevationMilliDeg > 0`, `catalogRegistry.isRegistered(catalogHash)`, operators pairwise distinct, digest unused, signature recovers to a **registered** attester whose bond `isActive`, signers pairwise distinct → finally `msg.sender` must be one of the operators. It records one beacon, one `StationReport` per member, credits every operator, and forwards any `msg.value` to the immutable `orbitalVault` or reverts.
 
-Custom errors name the exact gate: `IsPaused`, `LengthMismatch`, `QuorumNotMet`, `TooManyAttestations`, `InconsistentQuorum`, `BadAsn`, `BelowHorizon`, `Future`, `Expired`, `Replay`, `BadSigner`, `DuplicateSigner`, `DuplicateOperator`, `WrongOperator`, `BadSignature`, `VaultTransfer`, plus the governance set.
+Custom errors name the exact gate: `IsPaused`, `LengthMismatch`, `QuorumNotMet`, `TooManyAttestations`, `InconsistentQuorum`, `BadAsn`, `BelowHorizon`, `Future`, `Expired`, `Replay`, `BadSigner`, `NotBonded`, `UnregisteredCatalog`, `DuplicateSigner`, `DuplicateOperator`, `WrongOperator`, `BadSignature`, `VaultTransfer`, plus the governance set.
 
-The contract never computes an orbit. SGP4, the boresight match and the ASN lookup are all off-chain; what it verifies is that *k* registered keys signed attestations describing the same sighting.
+The contract never computes an orbit. SGP4, the boresight match and the ASN lookup are all off-chain; what it verifies is that *k* registered, bonded keys signed attestations describing the same sighting against a registered catalog.
+
+`isAttester` stays. Bonding is necessary but not sufficient: anyone can lock BNB, and that must not admit them to the set. The owner still decides who is in.
 
 Signature malleability is deliberately not screened. The replay key is the digest, not the signature, so a flipped `s` produces the same digest and reverts on `Replay` anyway.
+
+The EIP-712 type string is unchanged. Every committed digest in `vectors/eip712/attestations.json` still verifies.
 
 Deploy:
 
@@ -262,7 +271,19 @@ Deploy:
 cd contracts && OWNER=0x... ATTESTER=0x... ORBITAL_VAULT=0x... forge script script/Deploy.s.sol --rpc-url chapel --broadcast
 ```
 
-`foundry.toml` already carries `bsc` and `chapel` RPC aliases.
+`MIN_BOND` (default 1 BNB), `UNBONDING_PERIOD` (default 7 days) and `REPORTER_BOUNTY_BPS` (default 1000 = 10 %) are read from the environment with those defaults. `foundry.toml` already carries `bsc` and `chapel` RPC aliases.
+
+## Bonds and equivocation
+
+Attesters lock native BNB in `SkyRelayBond`. `isActive` is `bonded >= minBond` and not unbonding. `requestUnbond` starts a delay *and deactivates in the same transaction*, so an attester cannot equivocate and unbond in the same block. After `unbondingPeriod` they `withdraw`.
+
+Equivocation, exactly: two attestations from the **same signer**, with the **same `operator`** and the **same `timestamp`**, but **different digests**. A terminal is in one state at one second. That is two `ecrecover` calls and a comparison — no orbital mechanics.
+
+What is **not** equivocation, and does not slash: two attestations with the same `noradId` and `timestamp` but **different operators**. That is a quorum — several stations reporting one sighting from different places, with legitimately different elevation and Doppler.
+
+On a valid report, `slashEquivocation` pays `reporterBountyBps` of the bond to the reporter, the rest to the vault, zeros the bond, and marks the attester permanently ineligible. The same digest pair cannot be reported for a second bounty.
+
+Controlling a quorum of *k* now costs *k* bonds, not *k* free keys. A bonded attester with a real station that never contradicts itself can still lie about the physics. Bonding raises the cost of lying; it does not establish truth. The fraud proof that would establish it does not exist here.
 
 ## Governance
 
@@ -337,15 +358,17 @@ without which every range-rate — and therefore every Doppler shift — is bias
 
 which puts a real overhead pass at |*f*_d| ≲ 270 kHz and crosses zero at closest approach; the fixtures are deliberately placed off the peak of their passes and land between 145 and 227 kHz.
 
-Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 57**, so the feature vector records the next slot as a timing fingerprint. Full derivation: [`docs/orbital-proof.md`](docs/orbital-proof.md). Protocol: [`docs/protocol.md`](docs/protocol.md).
+Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 57**, so the feature vector records the next slot as a timing fingerprint. Full derivation: [`docs/orbital-proof.md`](docs/orbital-proof.md). Protocol: [`docs/protocol.md`](docs/protocol.md). On-chain layout and gas: [`docs/onchain.md`](docs/onchain.md).
 
 ## Repository map
 
-About 2 750 lines of source, no runtime dependencies.
+About 3 050 lines of source, no runtime dependencies.
 
 | Path | Lines | What it does |
 |---|---|---|
-| `contracts/src/SkyRelayBeacon.sol` | 406 | Quorum verifier, attester registry, timelocked governance |
+| `contracts/src/SkyRelayBeacon.sol` | 439 | Quorum verifier, attester registry, timelocked governance |
+| `contracts/src/SkyRelayBond.sol` | 190 | Native-BNB bonds, equivocation slash |
+| `contracts/src/CatalogRegistry.sol` | 91 | `catalogHash` → locator; `isRegistered` |
 | `packages/core/src/orbit/sgp4.ts` | 327 | Near-earth SGP4 initialiser and propagator, TEME output |
 | `packages/core/src/orbit/coords.ts` | 157 | Julian date, GMST, TEME→ECEF (position and velocity), ellipsoidal station, look angles |
 | `packages/core/src/orbit/tle.ts` | 150 | 69-column TLE parsing with checksum validation, catalog commitment |
@@ -367,7 +390,7 @@ About 2 750 lines of source, no runtime dependencies.
 
 ## Tests
 
-**56 TypeScript** (`node:test`) and **42 Solidity** (Foundry, across three suites, including fuzz).
+**58 TypeScript** (`node:test`) and **64 Solidity** (Foundry, across five suites, including fuzz).
 
 The ones that carry weight:
 
@@ -390,20 +413,28 @@ The ones that carry weight:
 | `test_oneAttesterCannotFillTheQuorumAlone` | one key signing k times to fake a quorum |
 | `test_frontRunnerCannotStealOrGrief` | mempool theft of a signed attestation |
 | `test_addingAnAttesterWaitsOutTheDelay` / `test_removingAnAttesterIsImmediate` | the timelock asymmetry being implemented backwards |
+| `test_requestUnbondDeactivatesImmediately` | an attester equivocating and unbonding in the same block |
+| `test_rejectsSignerWhoseBondIsBelowMinBond` | a registered key with nothing at stake still being able to sign |
+| `test_rejectsUnregisteredCatalogHash` | resolving against a catalog nobody published |
+| `test_genuineEquivocationSlashesPaysAndEjects` | a self-contradiction about one station-second going unpunished |
+| `test_quorumOfThreeStationsAtOneInstantDoesNotSlash` | treating a quorum as equivocation and slashing honest members |
+| `test_registeringTheSameHashTwiceReverts` | a catalog hash being silently retargeted |
 
 ## What this proves / does not prove
 
-**Proves:** deterministic encoding from a Dishy-shaped JSON plus public TLEs into a digest `ecrecover` accepts, with ASN, TTL, replay, operator, quorum and horizon checks — and that two independent implementations of Keccak-256 and EIP-712 (TypeScript here, solc in `contracts/`) agree byte for byte on every committed vector.
+**Proves:** deterministic encoding from a Dishy-shaped JSON plus public TLEs into a digest `ecrecover` accepts, with ASN, TTL, replay, operator, quorum, horizon, registered-catalog and active-bond checks — and that two independent implementations of Keccak-256 and EIP-712 (TypeScript here, solc in `contracts/`) agree byte for byte on every committed vector. Also that two signatures from one key, about one station at one second, with different digests, are slashable on chain.
 
-**The one geometric binding:** a capture is only attested if some satellite in the public catalog was actually where the terminal says it was pointing, at the second the attestation commits to — and the attestation names, by hash, the element set that claim was computed from.
+**The one geometric binding:** a capture is only attested if some satellite in the public catalog was actually where the terminal says it was pointing, at the second the attestation commits to — and the attestation names, by hash, the element set that claim was computed from, a hash the registry must already hold.
 
-**Does not prove:** that a given JSON was signed by SpaceX silicon; that the operator was physically at the station it declares; that BSC validators live in orbit; affiliation with SpaceX/Starlink.
+**Does not prove:** that a given JSON was signed by SpaceX silicon; that the operator was physically at the station it declares; that the numbers in a never-contradicted attestation are true; that BSC validators live in orbit; affiliation with SpaceX/Starlink.
 
 ## Known limits
 
-- **The attester set is only as independent as its operator.** `quorumThreshold` sets how many distinct registered keys must sign one sighting, and the contract enforces distinctness — but nothing here makes those keys belong to different people. A deployment where one party holds all of them is indistinguishable on chain from k genuinely independent stations, and that party can fabricate k mutually consistent reports by running SGP4. The quorum raises the cost of compromise; it does not create independence.
-- **`quorumThreshold` ships at 1.** A fresh deployment registers one attester, so out of the box the trust model *is* a single EOA. Raising it is an operational act, not a code change.
-- **The owner is trusted.** It can pause the contract, and it can add attesters (after the 2-day delay) or remove them (immediately). It cannot forge a beacon, but it can decide who may.
+- **The attester set is only as independent as its operator.** `quorumThreshold` sets how many distinct registered keys must sign one sighting, and the contract enforces distinctness — but nothing here makes those keys belong to different people. A deployment where one party holds all of them, and posts every bond, is indistinguishable on chain from k genuinely independent stations, and that party can fabricate k mutually consistent reports by running SGP4. The quorum and the bond raise the cost of compromise; they do not create independence.
+- **`quorumThreshold` ships at 1.** A fresh deployment registers one attester, so out of the box the trust model *is* a single bonded EOA. Raising it is an operational act, not a code change.
+- **A bond does not establish truth.** A bonded attester with a real station that never contradicts itself can still lie about the physics. The two on-chain fraud proofs are self-contradiction about one station-second, and using a catalog nobody registered. The fraud proof that would catch a consistent physics lie does not exist here.
+- **The catalog registry moves trust to the registrar.** A dishonest registrar can register a doctored catalog. The hash stops substitution after the fact; it does not certify the file.
+- **The owner is trusted.** It can pause the contract, and it can add attesters (after the 2-day delay) or remove them (immediately). It cannot forge a beacon, but it can decide who may. The registrar, which starts as the owner, decides which catalog hashes exist.
 - **The attestation is a location fingerprint.** Stripping GPS from the capture does not hide much: `(noradId, elevation, doppler, timestamp)` against a public TLE constrains the observer to a narrow region, and a few beacons pin it. Treat the station location as public.
 - **`dishGetStatus.snr` is deprecated.** Recent terminal firmware stopped populating it, so `extractFeatures` will reject captures from a current dish until the feature set moves to a field that is still served. The fixtures use the documented field.
 - **`usedDigest` grows without bound** — one permanent storage slot per beacon, load-bearing only for the 120 s TTL.
@@ -414,14 +445,13 @@ The ones that carry weight:
 
 Listed in the order that would actually move the trust model, not the order that is easiest:
 
-1. **Externally verifiable independence between attesters.** The mechanism for a quorum now exists; what does not exist is any reason for an observer to believe the k keys are k people. Stake, identity attestations or geographic proofs would each be a different answer, and none is implemented.
-2. **On-chain pass aggregation.** `checkPassShape` is auditable off chain today, but the contract still accepts each beacon in isolation. A verifier that scored a station on the coherence of its whole track would make the shape constraint binding rather than advisory.
-3. **Bounded replay storage.** `usedDigest` is permanent but only load-bearing for 120 s; a time-bucketed structure would let old entries be pruned.
-4. **Feature migration off `snr`.** Whatever current firmware still populates.
+1. **A fraud proof that a bonded attester lied about the physics.** Bonding prices keys; it does not establish that the numbers are true. That proof does not exist here, and it is the one that would change the honest description of this project.
+2. **Externally verifiable independence between attesters.** k bonds can still be one person. Identity or geographic proofs would be a different answer, and neither is implemented.
+3. **On-chain pass aggregation.** `checkPassShape` is auditable off chain today, but the contract still accepts each beacon in isolation. A verifier that scored a station on the coherence of its whole track would make the shape constraint binding rather than advisory.
+4. **Bounded replay storage.** `usedDigest` is permanent but only load-bearing for 120 s; a time-bucketed structure would let old entries be pruned.
+5. **Feature migration off `snr`.** Whatever current firmware still populates.
 
-Item 1 is the one that would change the honest description of this project, and it is not implemented.
-
-Landed since the first release: the catalog commitment, the quorum mechanism (the mechanical half only — see the caveat above), and pass-shape verification.
+Landed since the first release: the catalog commitment, the quorum mechanism (the mechanical half only — see the caveat above), pass-shape verification, native-BNB bonds with equivocation slashing, and the catalog registry.
 
 ## FAQ
 
@@ -429,9 +459,11 @@ Landed since the first release: the catalog commitment, the quorum mechanism (th
 
 **Is this affiliated with SpaceX or Starlink?** No, in any sense. It consumes a JSON file a terminal you own serves on your own LAN, plus public catalogs.
 
-**Could I fake a beacon?** If you hold `quorumThreshold` attester keys, yes — run SGP4 yourself and sign k consistent reports. Without them you would need to find a station, an instant and a real element set that agree to within 2°, which is work but not impossible. Every gate here raises the cost of forgery; none makes it impossible.
+**Could I fake a beacon?** If you hold `quorumThreshold` attester keys *and* their bonds, yes — run SGP4 yourself and sign k consistent reports. Without them you would need to find a station, an instant and a real element set that agree to within 2°, which is work but not impossible. Every gate here raises the cost of forgery; none makes it impossible.
 
-**Does the quorum make it trustless?** No. It makes an attacker compromise k keys instead of one, and stops a dishonest minority. It says nothing about whether those k keys belong to k people — see [Known limits](#known-limits).
+**Does the quorum make it trustless?** No. It makes an attacker compromise k keys and lock k bonds instead of one, and stops a dishonest minority. It says nothing about whether those k keys belong to k people — see [Known limits](#known-limits).
+
+**Does bonding make the numbers true?** No. It makes keys expensive to use, and it makes one kind of lie (contradicting yourself about one station-second) slashable. A consistent physics lie from a bonded station is still a signature the contract accepts.
 
 **Why implement SGP4 and Keccak from scratch instead of using a library?** For Keccak, so the digest the pipeline produces can be *compared* against solc rather than trusted — two implementations sharing a dependency prove nothing. For SGP4, so the WGS-72 constants, the frame conversions and the error budget are all visible and testable in one place. Both are pinned against external references.
 

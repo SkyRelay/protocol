@@ -42,6 +42,10 @@ Without it the chain sees only a NORAD id, and an attestation computed from a do
 
 What it does **not** do is prove the committed catalog is the true one. It makes the choice auditable after the fact, not enforced at signing time.
 
+`CatalogRegistry` stores that hash with an opaque `locator` (a BNB Greenfield object reference in practice). The contract does not parse or validate the locator: the keccak hash is the commitment, the locator is a hint about where to look. An object fetched from it that does not hash to `catalogHash` is the wrong object. `verifyAndRecord` refuses a hash the registry does not hold.
+
+The registry moves the trust rather than removing it. A dishonest registrar can register a doctored catalog. What the hash prevents is substitution after the fact — entries are immutable once written.
+
 ## EIP-712
 
 ```
@@ -82,10 +86,10 @@ The numbers differ because the stations are hundreds of kilometres apart; they a
 
 **What a quorum is worth, precisely.** The off-chain check is the conjunction of independent per-station checks against one shared orbit, so it is not a stronger *mathematical* statement than a single station makes. Its value is operational:
 
-- an attacker must compromise *k* independent keys instead of one;
+- an attacker must compromise *k* independent keys *and* lock *k* × `minBond` instead of one;
 - a dishonest minority cannot push through data the honest members contradict.
 
-It does **not** stop a single party who holds every key and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Anyone reading "quorum" as "unforgeable" is reading too much into it.
+It does **not** stop a single party who holds every key, posts every bond, and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Anyone reading "quorum" as "unforgeable" is reading too much into it.
 
 ## Pass tracks
 
@@ -127,16 +131,32 @@ function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata s
 2. `atts.length == sigs.length`, non-empty, `≥ quorumThreshold`, `≤ MAX_QUORUM` (16)
 3. TTL on `atts[0].timestamp`: within `(now − 120, now + 30]`
 4. every member agrees on `noradId`, `timestamp`, `catalogHash`
-5. every member: `asn ∈ {14593, 45700}`, `elevationMilliDeg > 0`
+5. every member: `asn ∈ {14593, 45700}`, `elevationMilliDeg > 0`, `catalogRegistry.isRegistered(catalogHash)`
 6. operators pairwise distinct
 7. each digest unused, then marked used
-8. each signature recovers to a **registered** attester, and signers are pairwise distinct
+8. each signature recovers to a **registered** attester whose bond `isActive`, and signers are pairwise distinct
 9. `msg.sender` is one of the operators
 10. record: one beacon, one `StationReport` per member, `msg.value` forwarded to `orbitalVault`
 
+`isAttester` is still required. Bonding is necessary but not sufficient: anyone can lock BNB, and that must not admit them to the set. The owner still decides who is in.
+
 Signature malleability is not screened, and does not need to be: the replay key is the digest, not the signature, so a flipped `s` produces the same digest and reverts on `Replay`.
 
-The contract never computes an orbit. SGP4, the boresight match and the ASN lookup are all off-chain; what it verifies is that *k* registered keys signed attestations describing the same sighting.
+The contract never computes an orbit. SGP4, the boresight match and the ASN lookup are all off-chain; what it verifies is that *k* registered, bonded keys signed attestations describing the same sighting against a registered catalog.
+
+The EIP-712 type string is unchanged. Storage, events and measured gas: [`onchain.md`](onchain.md).
+
+## Bonds and equivocation
+
+`SkyRelayBond` is a separate contract the beacon holds by immutable address. Attesters lock native BNB. `isActive` is `bonded >= minBond` and not unbonding. `requestUnbond` deactivates immediately — otherwise an attester could equivocate and unbond in the same block — and `withdraw` is allowed after `unbondingPeriod`.
+
+Equivocation, exactly: two attestations from the **same signer**, with the **same `operator`** and the **same `timestamp`**, but **different digests**. That is two `ecrecover` calls and a comparison. A terminal is in one state at one second; signing two stories about one station at one instant is a contradiction.
+
+What is **not** equivocation: the same `noradId` and `timestamp` with **different operators**. That is a quorum. Several stations at one instant report different elevation and Doppler because they are in different places; slashing that would punish honest members.
+
+On a valid report the reporter receives `reporterBountyBps` of the bond, the vault receives the rest, the bond is zeroed, and the attester is permanently ineligible. The digest pair is recorded so the same report cannot collect a second bounty.
+
+Two lies are provable on chain with no orbit computation: this one, and naming a catalog nobody registered.
 
 ## Governance
 
@@ -157,11 +177,17 @@ One rule, applied consistently:
 
 ## Trust model
 
-Every on-chain check runs on fields the attesters signed. They bound *buggy* attesters, not dishonest ones: an attester that lies simply signs consistent lies. What the protocol offers is a dial — `quorumThreshold` — that sets how many independent keys must lie at once.
+Every on-chain check runs on fields the attesters signed. They bound *buggy* attesters, and they bound one kind of dishonest attester: one that contradicts itself about a single station-second. An attester that lies *consistently* simply signs consistent lies, and the contract accepts them.
 
-At `quorumThreshold = 1` the model reduces to a single EOA, and the honest description is the one in README's *Known limits*. Raising it is an operational decision, not a code change, and the contract will not let it exceed the number of registered attesters.
+What the protocol offers is a dial — `quorumThreshold` — that sets how many independent keys must lie at once, and a price — `minBond` — on each of those keys. Controlling a quorum of k costs k bonds, not k free keys.
 
-Making the assumption genuinely small needs something this repository does not have: attesters whose independence is externally verifiable, and a reason to believe they are not all the same person.
+At `quorumThreshold = 1` the model reduces to a single bonded EOA, and the honest description is the one in README's *Known limits*. Raising it is an operational decision, not a code change, and the contract will not let it exceed the number of registered attesters.
+
+A bonded attester with a real station that never contradicts itself can still lie about the physics. Bonding raises the cost of lying; it does not establish truth. The fraud proof that would establish it does not exist here.
+
+The catalog registry moves trust to the registrar rather than removing it. A dishonest registrar can register a doctored catalog; the hash only prevents substitution after the fact.
+
+Making the assumption genuinely small still needs something this repository does not have: attesters whose independence is externally verifiable, and a reason to believe they are not all the same person. k bonds can still be one person.
 
 ## Privacy
 
@@ -171,4 +197,4 @@ This protects the *capture*, not the operator. The attestation itself publishes 
 
 ## Attester keys
 
-Foundry tests use `vm.sign`. Production attesters are operator EOAs or Safes. The TypeScript pipeline **does not** need secp256k1 at runtime: it produces the digest; the chain does ecrecover.
+Foundry tests use `vm.sign`. Production attesters are operator EOAs or Safes, and each must lock at least `minBond` in `SkyRelayBond` to be `isActive`. The TypeScript pipeline **does not** need secp256k1 at runtime: it produces the digest; the chain does ecrecover. Bonding is checked on chain, not in the pipeline.

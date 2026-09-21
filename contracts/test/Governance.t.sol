@@ -26,7 +26,7 @@ contract GovernanceTest is Test {
     function setUp() public {
         vault = new VaultMock();
         vm.prank(owner);
-        beacon = new SkyRelayBeacon(owner, attesterA, address(vault));
+        beacon = new SkyRelayBeacon(owner, attesterA, address(vault), makeAddr("catalog"), makeAddr("bond"));
     }
 
     function test_seedsOneAttesterWithThresholdOne() public view {
@@ -38,12 +38,18 @@ contract GovernanceTest is Test {
     }
 
     function test_constructorRejectsZero() public {
+        address catalog_ = makeAddr("catalog");
+        address bond_ = makeAddr("bond");
         vm.expectRevert(SkyRelayBeacon.ZeroAddress.selector);
-        new SkyRelayBeacon(address(0), attesterA, address(vault));
+        new SkyRelayBeacon(address(0), attesterA, address(vault), catalog_, bond_);
         vm.expectRevert(SkyRelayBeacon.ZeroAddress.selector);
-        new SkyRelayBeacon(owner, address(0), address(vault));
+        new SkyRelayBeacon(owner, address(0), address(vault), catalog_, bond_);
         vm.expectRevert(SkyRelayBeacon.ZeroAddress.selector);
-        new SkyRelayBeacon(owner, attesterA, address(0));
+        new SkyRelayBeacon(owner, attesterA, address(0), catalog_, bond_);
+        vm.expectRevert(SkyRelayBeacon.ZeroAddress.selector);
+        new SkyRelayBeacon(owner, attesterA, address(vault), address(0), bond_);
+        vm.expectRevert(SkyRelayBeacon.ZeroAddress.selector);
+        new SkyRelayBeacon(owner, attesterA, address(vault), catalog_, address(0));
     }
 
     // ── adding an attester is an expansion: timelocked ──────────────────────

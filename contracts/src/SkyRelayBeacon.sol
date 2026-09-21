@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+interface ICatalogRegistry {
+    function isRegistered(bytes32 catalogHash) external view returns (bool);
+}
+
+interface ISkyRelayBond {
+    function isActive(address attester) external view returns (bool);
+}
+
 /// @title SkyRelayBeacon
 /// @notice Verifies EIP-712 Starlink physical attestations and records beacons on BSC.
 /// @dev No OpenZeppelin. Domain matches packages/core/src/crypto/eip712.ts.
@@ -10,12 +18,22 @@ pragma solidity ^0.8.24;
 ///
 /// 1. The contract never computes an orbit. SGP4, the boresight match and the
 ///    ASN lookup all happen off chain. What it verifies is that a quorum of
-///    registered keys signed attestations describing *the same sighting* —
-///    same satellite, same second, same element set.
+///    registered, bonded keys signed attestations describing *the same
+///    sighting* — same satellite, same second, same registered element set.
 /// 2. A quorum does not make lying impossible. Anyone holding k registered keys
-///    can still sign k mutually consistent fabrications. What it buys is that
-///    an attacker must compromise k independent keys instead of one, and that a
-///    dishonest minority cannot push through data the others contradict.
+///    and k bonds can still sign k mutually consistent fabrications. What it
+///    buys is that an attacker must compromise k independent keys *and* lock
+///    k × minBond instead of one, and that a dishonest minority cannot push
+///    through data the others contradict.
+///
+/// Two lies are provable on chain, with no orbit computation: contradicting
+/// yourself about one station-second (`SkyRelayBond.slashEquivocation`) and
+/// naming a catalog nobody registered. A bonded attester that never
+/// contradicts itself can still lie about the physics; bonding raises the
+/// cost of lying, it does not establish truth.
+///
+/// This contract does not own the registry or the bond. Both are immutable
+/// addresses so either can be replaced by deploying a new beacon.
 contract SkyRelayBeacon {
     uint32 public constant SPACEX_ASN = 14593;
     uint32 public constant STARLINK_ID_ASN = 45700;
@@ -38,6 +56,8 @@ contract SkyRelayBeacon {
     bytes32 private immutable _versionHash;
 
     address public immutable orbitalVault;
+    ICatalogRegistry public immutable catalogRegistry;
+    ISkyRelayBond public immutable bond;
 
     // ── governance ──────────────────────────────────────────────────────────
 
@@ -46,6 +66,9 @@ contract SkyRelayBeacon {
     bool public paused;
 
     /// @notice Keys whose signature the contract accepts.
+    /// @dev Bonding is necessary but not sufficient. Anyone can lock BNB, and
+    ///      that must not admit them to the set — the owner still decides who
+    ///      is in. The bond makes those keys expensive to equivocate with.
     mapping(address => bool) public isAttester;
     uint8 public attesterCount;
 
@@ -140,18 +163,25 @@ contract SkyRelayBeacon {
     error WrongOperator();
     error BadSignature();
     error VaultTransfer();
+    error UnregisteredCatalog();
+    error NotBonded();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
         _;
     }
 
-    constructor(address owner_, address attester_, address orbitalVault_) {
-        if (owner_ == address(0) || attester_ == address(0) || orbitalVault_ == address(0)) {
+    constructor(address owner_, address attester_, address orbitalVault_, address catalogRegistry_, address bond_) {
+        if (
+            owner_ == address(0) || attester_ == address(0) || orbitalVault_ == address(0)
+                || catalogRegistry_ == address(0) || bond_ == address(0)
+        ) {
             revert ZeroAddress();
         }
         owner = owner_;
         orbitalVault = orbitalVault_;
+        catalogRegistry = ICatalogRegistry(catalogRegistry_);
+        bond = ISkyRelayBond(bond_);
         isAttester[attester_] = true;
         attesterCount = 1;
         quorumThreshold = 1;
@@ -279,10 +309,11 @@ contract SkyRelayBeacon {
 
     // ── beacons ─────────────────────────────────────────────────────────────
 
-    /// @notice Record one sighting, attested by a quorum of registered keys.
+    /// @notice Record one sighting, attested by a quorum of registered, bonded keys.
     /// @param atts One attestation per reporting station. All must describe the
-    ///             same satellite, the same second and the same element set.
-    /// @param sigs Signature per attestation, from distinct registered attesters.
+    ///             same satellite, the same second and the same registered element set.
+    /// @param sigs Signature per attestation, from distinct registered attesters
+    ///             whose bond is currently active.
     function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata sigs)
         external
         payable
@@ -310,6 +341,7 @@ contract SkyRelayBeacon {
             ) revert InconsistentQuorum();
             if (att.asn != SPACEX_ASN && att.asn != STARLINK_ID_ASN) revert BadAsn();
             if (att.elevationMilliDeg <= 0) revert BelowHorizon();
+            if (!catalogRegistry.isRegistered(att.catalogHash)) revert UnregisteredCatalog();
 
             for (uint256 j = 0; j < i; j++) {
                 if (atts[j].operator == att.operator) revert DuplicateOperator();
@@ -321,6 +353,7 @@ contract SkyRelayBeacon {
 
             address signer = _recover(digest, sigs[i]);
             if (!isAttester[signer]) revert BadSigner();
+            if (!bond.isActive(signer)) revert NotBonded();
             for (uint256 j = 0; j < i; j++) {
                 if (signers[j] == signer) revert DuplicateSigner();
             }

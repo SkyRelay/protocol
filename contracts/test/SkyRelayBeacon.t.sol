@@ -3,6 +3,8 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {SkyRelayBeacon} from "../src/SkyRelayBeacon.sol";
+import {SkyRelayBond} from "../src/SkyRelayBond.sol";
+import {CatalogRegistry} from "../src/CatalogRegistry.sol";
 
 contract Vault {
     receive() external payable {}
@@ -17,6 +19,9 @@ contract SkyRelayBeaconTest is Test {
     uint256 internal constant PK_B = 0xB0B;
     uint256 internal constant PK_C = 0xC0FFEE;
     uint256 internal constant PK_OUTSIDER = 0xDEAD;
+    uint256 internal constant MIN_BOND = 1 ether;
+    uint64 internal constant UNBONDING_PERIOD = 7 days;
+    uint16 internal constant REPORTER_BOUNTY_BPS = 1000;
 
     address internal owner = makeAddr("owner");
     address internal opA = makeAddr("opA");
@@ -24,14 +29,29 @@ contract SkyRelayBeaconTest is Test {
     address internal opC = makeAddr("opC");
 
     Vault internal vault;
+    CatalogRegistry internal catalog;
+    SkyRelayBond internal bonds;
     SkyRelayBeacon internal beacon;
 
     bytes32 internal constant CATALOG = keccak256("catalog-2026-263");
 
     function setUp() public {
         vault = new Vault();
-        beacon = new SkyRelayBeacon(owner, vm.addr(PK_A), address(vault));
+        catalog = new CatalogRegistry(owner);
+        uint64 nonce = vm.getNonce(address(this));
+        address predictedBeacon = vm.computeCreateAddress(address(this), nonce + 1);
+        bonds = new SkyRelayBond(MIN_BOND, UNBONDING_PERIOD, REPORTER_BOUNTY_BPS, address(vault), predictedBeacon);
+        beacon = new SkyRelayBeacon(owner, vm.addr(PK_A), address(vault), address(catalog), address(bonds));
+        assertEq(address(beacon), predictedBeacon);
         vm.warp(1_789_918_203);
+
+        vm.prank(owner);
+        catalog.register(CATALOG, "gnfd://skyrelay-catalog/test.tle");
+
+        address attester = vm.addr(PK_A);
+        vm.deal(attester, 10 ether);
+        vm.prank(attester);
+        bonds.bond{value: MIN_BOND}();
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
@@ -67,6 +87,12 @@ contract SkyRelayBeaconTest is Test {
         out[0] = sig;
     }
 
+    function _bond(address who) internal {
+        vm.deal(who, 10 ether);
+        vm.prank(who);
+        bonds.bond{value: MIN_BOND}();
+    }
+
     /// @dev Grow the attester set to three and require two of them.
     function _enableQuorumOfTwo() internal {
         vm.startPrank(owner);
@@ -76,6 +102,8 @@ contract SkyRelayBeaconTest is Test {
         vm.warp(block.timestamp + beacon.ROTATION_DELAY());
         beacon.activateAttester(vm.addr(PK_B));
         beacon.activateAttester(vm.addr(PK_C));
+        _bond(vm.addr(PK_B));
+        _bond(vm.addr(PK_C));
         vm.prank(owner);
         beacon.setQuorumThreshold(2);
     }
@@ -164,6 +192,38 @@ contract SkyRelayBeaconTest is Test {
         beacon.verifyAndRecord(_one(a), sigs);
     }
 
+    function test_rejectsSignerWhoseBondIsBelowMinBond() public {
+        vm.prank(owner);
+        beacon.scheduleAttester(vm.addr(PK_B));
+        vm.warp(block.timestamp + beacon.ROTATION_DELAY());
+        beacon.activateAttester(vm.addr(PK_B));
+        // registered, but bonded = 0
+        SkyRelayBeacon.SkyRelayAttestation memory a = _att(opA);
+        bytes[] memory sigs = _one(_sign(PK_B, a));
+        vm.prank(opA);
+        vm.expectRevert(SkyRelayBeacon.NotBonded.selector);
+        beacon.verifyAndRecord(_one(a), sigs);
+    }
+
+    function test_rejectsUnbondingSigner() public {
+        vm.prank(vm.addr(PK_A));
+        bonds.requestUnbond();
+        SkyRelayBeacon.SkyRelayAttestation memory a = _att(opA);
+        bytes[] memory sigs = _one(_sign(PK_A, a));
+        vm.prank(opA);
+        vm.expectRevert(SkyRelayBeacon.NotBonded.selector);
+        beacon.verifyAndRecord(_one(a), sigs);
+    }
+
+    function test_rejectsUnregisteredCatalogHash() public {
+        SkyRelayBeacon.SkyRelayAttestation memory a = _att(opA);
+        a.catalogHash = keccak256("never-registered");
+        bytes[] memory sigs = _one(_sign(PK_A, a));
+        vm.prank(opA);
+        vm.expectRevert(SkyRelayBeacon.UnregisteredCatalog.selector);
+        beacon.verifyAndRecord(_one(a), sigs);
+    }
+
     function test_rejectsSubmitterWhoIsNotAnOperator() public {
         SkyRelayBeacon.SkyRelayAttestation memory a = _att(opA);
         bytes[] memory sigs = _one(_sign(PK_A, a));
@@ -210,6 +270,40 @@ contract SkyRelayBeaconTest is Test {
         atts[1].elevationMilliDeg = 31_804;
         atts[1].dopplerHz = 96_210;
         atts[1].snrMilliDb = 7100;
+    }
+
+    function _triple() internal view returns (SkyRelayBeacon.SkyRelayAttestation[] memory atts) {
+        atts = new SkyRelayBeacon.SkyRelayAttestation[](3);
+        atts[0] = _att(opA);
+        atts[1] = _att(opB);
+        atts[1].elevationMilliDeg = 31_804;
+        atts[1].dopplerHz = 220_040;
+        atts[1].snrMilliDb = 8100;
+        atts[2] = _att(opC);
+        atts[2].elevationMilliDeg = 25_210;
+        atts[2].dopplerHz = 215_966;
+        atts[2].snrMilliDb = 6900;
+        atts[2].asn = 45700;
+    }
+
+    function test_quorumOfThreeIsRecordedOnce() public {
+        _enableQuorumOfTwo();
+        vm.prank(owner);
+        beacon.setQuorumThreshold(3);
+
+        SkyRelayBeacon.SkyRelayAttestation[] memory atts = _triple();
+        bytes[] memory sigs = new bytes[](3);
+        sigs[0] = _sign(PK_A, atts[0]);
+        sigs[1] = _sign(PK_B, atts[1]);
+        sigs[2] = _sign(PK_C, atts[2]);
+
+        vm.prank(opA);
+        uint256 id = beacon.verifyAndRecord(atts, sigs);
+        assertEq(id, 1);
+        assertEq(beacon.totalBeacons(), 1, "a quorum is one beacon, not three");
+        assertEq(beacon.userBeaconCount(opA), 1);
+        assertEq(beacon.userBeaconCount(opB), 1);
+        assertEq(beacon.userBeaconCount(opC), 1);
     }
 
     function test_quorumOfTwoIsRecordedOnce() public {

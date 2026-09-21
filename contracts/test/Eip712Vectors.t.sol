@@ -22,7 +22,9 @@ contract Eip712VectorsTest is Test {
         json = vm.readFile("../vectors/eip712/attestations.json");
         chainId = vm.parseJsonUint(json, ".domain.chainId");
         verifyingContract = vm.parseJsonAddress(json, ".domain.verifyingContract");
-        beacon = new SkyRelayBeacon(makeAddr("owner"), makeAddr("attester"), makeAddr("vault"));
+        beacon = new SkyRelayBeacon(
+            makeAddr("owner"), makeAddr("attester"), makeAddr("vault"), makeAddr("catalog"), makeAddr("bond")
+        );
     }
 
     function _at(uint256 i) internal view returns (SkyRelayBeacon.SkyRelayAttestation memory a) {
