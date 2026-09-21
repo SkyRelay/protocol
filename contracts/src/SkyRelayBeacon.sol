@@ -218,8 +218,13 @@ contract SkyRelayBeacon {
     }
 
     /// @notice Raising the bar is immediate; lowering it waits out the delay.
+    /// @dev The MAX_QUORUM bound matters as much as the attesterCount one: a
+    ///      threshold above it would demand a set `verifyAndRecord` refuses to
+    ///      accept, so governance could otherwise brick beacon submission.
     function setQuorumThreshold(uint8 threshold) external onlyOwner {
-        if (threshold == 0 || threshold > attesterCount) revert ThresholdUnreachable();
+        if (threshold == 0 || threshold > attesterCount || threshold > MAX_QUORUM) {
+            revert ThresholdUnreachable();
+        }
         if (threshold >= quorumThreshold) {
             delete pendingQuorumThreshold;
             delete quorumThresholdEligibleAt;
@@ -238,7 +243,9 @@ contract SkyRelayBeacon {
         if (eligibleAt == 0) revert NotScheduled();
         if (block.timestamp < eligibleAt) revert TooEarly();
         uint8 threshold = pendingQuorumThreshold;
-        if (threshold == 0 || threshold > attesterCount) revert ThresholdUnreachable();
+        if (threshold == 0 || threshold > attesterCount || threshold > MAX_QUORUM) {
+            revert ThresholdUnreachable();
+        }
         delete pendingQuorumThreshold;
         delete quorumThresholdEligibleAt;
         quorumThreshold = threshold;

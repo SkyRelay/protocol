@@ -139,6 +139,29 @@ contract GovernanceTest is Test {
         vm.stopPrank();
     }
 
+    /// @dev `verifyAndRecord` refuses a set larger than MAX_QUORUM, so a
+    ///      threshold above it would demand a set that can never be submitted.
+    ///      Governance must not be able to brick beacon submission.
+    function test_quorumCannotBeSetAboveTheMaximumSetSize() public {
+        uint256 max = beacon.MAX_QUORUM();
+        for (uint256 i = 0; i <= max; i++) {
+            address a = makeAddr(string.concat("extra", vm.toString(i)));
+            vm.prank(owner);
+            beacon.scheduleAttester(a);
+            vm.warp(block.timestamp + beacon.ROTATION_DELAY());
+            beacon.activateAttester(a);
+        }
+        assertGt(beacon.attesterCount(), max, "need more attesters than MAX_QUORUM to test this");
+
+        vm.prank(owner);
+        vm.expectRevert(SkyRelayBeacon.ThresholdUnreachable.selector);
+        beacon.setQuorumThreshold(uint8(max + 1));
+
+        vm.prank(owner);
+        beacon.setQuorumThreshold(uint8(max));
+        assertEq(beacon.quorumThreshold(), uint8(max), "the maximum itself is still allowed");
+    }
+
     // ── pause ───────────────────────────────────────────────────────────────
 
     function test_ownerCanPauseAndUnpause() public {
