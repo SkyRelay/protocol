@@ -20,7 +20,7 @@ const DOMAIN = {
 const OPERATOR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as const;
 
 const trackFixture = () =>
-  JSON.parse(readFileSync(join(root, "vectors/tracks/genesis-01-44714.json"), "utf8")) as {
+  JSON.parse(readFileSync(join(root, "vectors/tracks/valentia-01-47352.json"), "utf8")) as {
     station: Station;
     expectNoradId: number;
     frames: unknown[];

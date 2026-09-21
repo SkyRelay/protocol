@@ -1,16 +1,16 @@
 {
-  "id": "quorum-haikou-007",
-  "capturedAt": "2026-09-20T15:30:03.210Z",
+  "id": "quorum-goonhilly-007",
+  "capturedAt": "2026-09-20T20:05:03.210Z",
   "source": "lan-grpc://192.168.100.1:9200",
   "method": "SpaceX.API.Device.Device/Handle",
-  "notes": "Second station of a three-way quorum: a different terminal 210 km away sees the same STARLINK-1008 at the same second, from a different elevation and with a different Doppler shift.",
+  "notes": "Second station of a three-way quorum: a different terminal 460 km away sees the same STARLINK-1008 at the same second, from a different elevation and with a different Doppler shift.",
   "station": {
-    "id": "MERIDIAN-04",
-    "latDeg": 20.04,
-    "lonDeg": 110.32,
-    "altKm": 0.015
+    "id": "GOONHILLY-02",
+    "latDeg": 50.05,
+    "lonDeg": -5.18,
+    "altKm": 0.1
   },
-  "expectNoradId": 44714,
+  "expectNoradId": 47352,
   "dishGetStatus": {
     "deviceInfo": {
       "id": "ut01000000-00000000-00b4d21a",
@@ -29,8 +29,8 @@
     "obstructionStats": {
       "fractionObstructed": 0.0102
     },
-    "boresightAzimuthDeg": 222.45,
-    "boresightElevationDeg": 33.531
+    "boresightAzimuthDeg": 270.773,
+    "boresightElevationDeg": 30.495
   },
   "dishGetDiagnostics": {
     "id": "ut01000000-00000000-00b4d21a",

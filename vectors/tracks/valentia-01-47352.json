@@ -1,26 +1,26 @@
 {
-  "id": "genesis-01-44714",
-  "notes": "One pass of STARLINK-1008 over GENESIS-01, sampled every 60 s. Used to check that a sequence of beacons forms a physically coherent pass, not just a bag of individually plausible instants.",
+  "id": "valentia-01-47352",
+  "notes": "One pass of STARLINK-2034 over VALENTIA-01, sampled every 60 s. Used to check that a sequence of beacons forms a physically coherent pass, not just a bag of individually plausible instants.",
   "station": {
-    "id": "GENESIS-01",
-    "latDeg": 18.23,
-    "lonDeg": 109.51,
-    "altKm": 0.05
+    "id": "VALENTIA-01",
+    "latDeg": 51.93,
+    "lonDeg": -10.35,
+    "altKm": 0.02
   },
-  "expectNoradId": 44714,
+  "expectNoradId": 47352,
   "frames": [
     {
       "id": "track-00",
-      "capturedAt": "2026-09-20T15:26:41.000Z",
+      "capturedAt": "2026-09-20T20:02:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -31,16 +31,16 @@
           "uptimeS": 26000
         },
         "state": "Connected",
-        "snr": 3.471,
-        "downlinkThroughputBps": 33247330,
-        "uplinkThroughputBps": 3324733,
-        "popPingLatencyMs": 76.909,
-        "popPingDropRate": 0.083,
+        "snr": 3.923,
+        "downlinkThroughputBps": 45954908,
+        "uplinkThroughputBps": 4595491,
+        "popPingLatencyMs": 73.944,
+        "popPingDropRate": 0.077,
         "obstructionStats": {
-          "fractionObstructed": 0.019
+          "fractionObstructed": 0.017
         },
-        "boresightAzimuthDeg": 219.843,
-        "boresightElevationDeg": 4.171
+        "boresightAzimuthDeg": 245.954,
+        "boresightElevationDeg": 8.241
       },
       "egress": {
         "asn": 14593,
@@ -50,16 +50,16 @@
     },
     {
       "id": "track-01",
-      "capturedAt": "2026-09-20T15:27:41.000Z",
+      "capturedAt": "2026-09-20T20:03:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -70,16 +70,16 @@
           "uptimeS": 26060
         },
         "state": "Connected",
-        "snr": 4.094,
-        "downlinkThroughputBps": 50770987,
-        "uplinkThroughputBps": 5077099,
-        "popPingLatencyMs": 72.82,
-        "popPingDropRate": 0.075,
+        "snr": 4.659,
+        "downlinkThroughputBps": 66662612,
+        "uplinkThroughputBps": 6666261,
+        "popPingLatencyMs": 69.112,
+        "popPingDropRate": 0.067,
         "obstructionStats": {
-          "fractionObstructed": 0.017
+          "fractionObstructed": 0.015
         },
-        "boresightAzimuthDeg": 221.001,
-        "boresightElevationDeg": 9.808
+        "boresightAzimuthDeg": 244.784,
+        "boresightElevationDeg": 14.99
       },
       "egress": {
         "asn": 14593,
@@ -89,16 +89,16 @@
     },
     {
       "id": "track-02",
-      "capturedAt": "2026-09-20T15:28:41.000Z",
+      "capturedAt": "2026-09-20T20:04:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -109,16 +109,16 @@
           "uptimeS": 26120
         },
         "state": "Connected",
-        "snr": 5.044,
-        "downlinkThroughputBps": 77495063,
-        "uplinkThroughputBps": 7749506,
-        "popPingLatencyMs": 66.584,
-        "popPingDropRate": 0.061,
+        "snr": 5.776,
+        "downlinkThroughputBps": 98088789,
+        "uplinkThroughputBps": 9808879,
+        "popPingLatencyMs": 61.779,
+        "popPingDropRate": 0.051,
         "obstructionStats": {
-          "fractionObstructed": 0.014
+          "fractionObstructed": 0.011
         },
-        "boresightAzimuthDeg": 223.234,
-        "boresightElevationDeg": 18.608
+        "boresightAzimuthDeg": 242.296,
+        "boresightElevationDeg": 25.691
       },
       "egress": {
         "asn": 14593,
@@ -128,16 +128,16 @@
     },
     {
       "id": "track-03",
-      "capturedAt": "2026-09-20T15:29:41.000Z",
+      "capturedAt": "2026-09-20T20:05:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -148,16 +148,16 @@
           "uptimeS": 26180
         },
         "state": "Connected",
-        "snr": 6.795,
-        "downlinkThroughputBps": 126746428,
-        "uplinkThroughputBps": 12674643,
-        "popPingLatencyMs": 55.093,
-        "popPingDropRate": 0.037,
+        "snr": 7.624,
+        "downlinkThroughputBps": 150037602,
+        "uplinkThroughputBps": 15003760,
+        "popPingLatencyMs": 49.658,
+        "popPingDropRate": 0.025,
         "obstructionStats": {
-          "fractionObstructed": 0.008
+          "fractionObstructed": 0.006
         },
-        "boresightAzimuthDeg": 229.453,
-        "boresightElevationDeg": 36.368
+        "boresightAzimuthDeg": 234.598,
+        "boresightElevationDeg": 46.251
       },
       "egress": {
         "asn": 14593,
@@ -167,16 +167,16 @@
     },
     {
       "id": "track-04",
-      "capturedAt": "2026-09-20T15:30:41.000Z",
+      "capturedAt": "2026-09-20T20:06:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -187,16 +187,16 @@
           "uptimeS": 26240
         },
         "state": "Connected",
-        "snr": 9.135,
-        "downlinkThroughputBps": 192551447,
-        "uplinkThroughputBps": 19255145,
-        "popPingLatencyMs": 39.738,
-        "popPingDropRate": 0.004,
+        "snr": 9.203,
+        "downlinkThroughputBps": 194453451,
+        "uplinkThroughputBps": 19445345,
+        "popPingLatencyMs": 39.294,
+        "popPingDropRate": 0.003,
         "obstructionStats": {
           "fractionObstructed": 0.001
         },
-        "boresightAzimuthDeg": 292.967,
-        "boresightElevationDeg": 73.47
+        "boresightAzimuthDeg": 153.309,
+        "boresightElevationDeg": 75.75
       },
       "egress": {
         "asn": 14593,
@@ -206,16 +206,16 @@
     },
     {
       "id": "track-05",
-      "capturedAt": "2026-09-20T15:31:41.000Z",
+      "capturedAt": "2026-09-20T20:07:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -226,16 +226,16 @@
           "uptimeS": 26300
         },
         "state": "Connected",
-        "snr": 7.093,
-        "downlinkThroughputBps": 135107545,
-        "uplinkThroughputBps": 13510754,
-        "popPingLatencyMs": 53.142,
-        "popPingDropRate": 0.032,
+        "snr": 7.473,
+        "downlinkThroughputBps": 145813001,
+        "uplinkThroughputBps": 14581300,
+        "popPingLatencyMs": 50.644,
+        "popPingDropRate": 0.027,
         "obstructionStats": {
-          "fractionObstructed": 0.007
+          "fractionObstructed": 0.006
         },
-        "boresightAzimuthDeg": 22.398,
-        "boresightElevationDeg": 39.779
+        "boresightAzimuthDeg": 85.358,
+        "boresightElevationDeg": 44.369
       },
       "egress": {
         "asn": 14593,
@@ -245,16 +245,16 @@
     },
     {
       "id": "track-06",
-      "capturedAt": "2026-09-20T15:32:41.000Z",
+      "capturedAt": "2026-09-20T20:08:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -265,16 +265,16 @@
           "uptimeS": 26360
         },
         "state": "Connected",
-        "snr": 5.198,
-        "downlinkThroughputBps": 81809439,
-        "uplinkThroughputBps": 8180944,
-        "popPingLatencyMs": 65.578,
-        "popPingDropRate": 0.059,
+        "snr": 5.686,
+        "downlinkThroughputBps": 95554169,
+        "uplinkThroughputBps": 9555417,
+        "popPingLatencyMs": 62.371,
+        "popPingDropRate": 0.052,
         "obstructionStats": {
-          "fractionObstructed": 0.013
+          "fractionObstructed": 0.012
         },
-        "boresightAzimuthDeg": 29.786,
-        "boresightElevationDeg": 20.123
+        "boresightAzimuthDeg": 78.399,
+        "boresightElevationDeg": 24.859
       },
       "egress": {
         "asn": 14593,
@@ -284,16 +284,16 @@
     },
     {
       "id": "track-07",
-      "capturedAt": "2026-09-20T15:33:41.000Z",
+      "capturedAt": "2026-09-20T20:09:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -304,16 +304,16 @@
           "uptimeS": 26420
         },
         "state": "Connected",
-        "snr": 4.187,
-        "downlinkThroughputBps": 53391781,
-        "uplinkThroughputBps": 5339178,
-        "popPingLatencyMs": 72.209,
-        "popPingDropRate": 0.073,
+        "snr": 4.606,
+        "downlinkThroughputBps": 65168717,
+        "uplinkThroughputBps": 6516872,
+        "popPingLatencyMs": 69.461,
+        "popPingDropRate": 0.067,
         "obstructionStats": {
-          "fractionObstructed": 0.016
+          "fractionObstructed": 0.015
         },
-        "boresightAzimuthDeg": 32.284,
-        "boresightElevationDeg": 10.746
+        "boresightAzimuthDeg": 76.066,
+        "boresightElevationDeg": 14.588
       },
       "egress": {
         "asn": 14593,
@@ -323,16 +323,16 @@
     },
     {
       "id": "track-08",
-      "capturedAt": "2026-09-20T15:34:41.000Z",
+      "capturedAt": "2026-09-20T20:10:01.000Z",
       "source": "lan-grpc://192.168.100.1:9200",
       "method": "SpaceX.API.Device.Device/Handle",
       "station": {
-        "id": "GENESIS-01",
-        "latDeg": 18.23,
-        "lonDeg": 109.51,
-        "altKm": 0.05
+        "id": "VALENTIA-01",
+        "latDeg": 51.93,
+        "lonDeg": -10.35,
+        "altKm": 0.02
       },
-      "expectNoradId": 44714,
+      "expectNoradId": 47352,
       "dishGetStatus": {
         "deviceInfo": {
           "id": "ut01000000-00000000-00e1c9f7",
@@ -343,16 +343,16 @@
           "uptimeS": 26480
         },
         "state": "Connected",
-        "snr": 3.538,
-        "downlinkThroughputBps": 35139349,
-        "uplinkThroughputBps": 3513935,
-        "popPingLatencyMs": 76.467,
-        "popPingDropRate": 0.082,
+        "snr": 3.888,
+        "downlinkThroughputBps": 44967110,
+        "uplinkThroughputBps": 4496711,
+        "popPingLatencyMs": 74.174,
+        "popPingDropRate": 0.078,
         "obstructionStats": {
-          "fractionObstructed": 0.018
+          "fractionObstructed": 0.017
         },
-        "boresightAzimuthDeg": 33.581,
-        "boresightElevationDeg": 4.895
+        "boresightAzimuthDeg": 74.963,
+        "boresightElevationDeg": 8.043
       },
       "egress": {
         "asn": 14593,

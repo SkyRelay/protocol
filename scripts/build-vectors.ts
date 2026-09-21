@@ -24,27 +24,35 @@ import { operatorFor, readCatalog, readDomain } from "./shared.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const GENESIS_01: Station = {
-  id: "GENESIS-01",
-  name: "南溟一号",
-  latDeg: 18.23,
-  lonDeg: 109.51,
-  altKm: 0.05,
+const VALENTIA_01: Station = {
+  id: "VALENTIA-01",
+  name: "Valentia Island, Ireland",
+  latDeg: 51.93,
+  lonDeg: -10.35,
+  altKm: 0.02,
 };
 
-const MERIDIAN_04: Station = {
-  id: "MERIDIAN-04",
-  name: "Haikou",
-  latDeg: 20.04,
-  lonDeg: 110.32,
-  altKm: 0.015,
+const GOONHILLY_02: Station = {
+  id: "GOONHILLY-02",
+  name: "Goonhilly Downs, Cornwall",
+  latDeg: 50.05,
+  lonDeg: -5.18,
+  altKm: 0.1,
 };
 
-const MV_ANYUAN: Station = {
-  id: "MV-ANYUAN",
-  name: "MV Anyuan (maritime roam)",
-  latDeg: 15.8,
-  lonDeg: 113.2,
+const PLEUMEUR_03: Station = {
+  id: "PLEUMEUR-03",
+  name: "Pleumeur-Bodou, Brittany",
+  latDeg: 48.79,
+  lonDeg: -3.52,
+  altKm: 0.06,
+};
+
+const MV_FASTNET: Station = {
+  id: "MV-FASTNET",
+  name: "MV Fastnet, North Atlantic",
+  latDeg: 50.2,
+  lonDeg: -12.6,
   altKm: 0.012,
 };
 
@@ -74,9 +82,9 @@ const UT = {
 const scenarios: Scenario[] = [
   {
     id: "connected-001",
-    capturedAt: "2026-09-20T15:30:03.210Z",
-    tle: "starlink-1008",
-    station: GENESIS_01,
+    capturedAt: "2026-09-20T20:05:03.210Z",
+    tle: "starlink-2034",
+    station: VALENTIA_01,
     notes:
       "Nominal connected terminal, mid-pass on STARLINK-1008. GPS is present in diagnostics so the privacy stripper has something to remove.",
     jitter: { az: 0.08, el: -0.06 },
@@ -101,9 +109,9 @@ const scenarios: Scenario[] = [
   },
   {
     id: "handover-002",
-    capturedAt: "2026-09-20T15:30:12.040Z",
-    tle: "starlink-1008",
-    station: GENESIS_01,
+    capturedAt: "2026-09-20T20:05:12.040Z",
+    tle: "starlink-2034",
+    station: VALENTIA_01,
     notes:
       "Same terminal 8.83 s later, captured 40 ms after the globally aligned :12 beam reassignment. SNR and throughput step as the terminal retargets.",
     jitter: { az: -0.11, el: 0.05 },
@@ -123,9 +131,9 @@ const scenarios: Scenario[] = [
   },
   {
     id: "obstructed-003",
-    capturedAt: "2026-09-20T14:06:27.880Z",
+    capturedAt: "2026-09-20T05:06:27.880Z",
     tle: "starlink-1526",
-    station: GENESIS_01,
+    station: PLEUMEUR_03,
     notes:
       "Low elevation on STARLINK-1526 with a partially obstructed sky: SNR 3.1 dB, larger pointing residual, throughput collapsed.",
     jitter: { az: 0.14, el: -0.12 },
@@ -145,11 +153,11 @@ const scenarios: Scenario[] = [
   },
   {
     id: "roam-004",
-    capturedAt: "2026-09-20T18:53:42.500Z",
-    tle: "starlink-2034",
-    station: MV_ANYUAN,
+    capturedAt: "2026-09-20T06:39:42.500Z",
+    tle: "starlink-1008",
+    station: MV_FASTNET,
     notes:
-      "Maritime roam on AS45700 from a vessel in the South China Sea, tracking STARLINK-2034. Larger pointing residual from deck motion.",
+      "Maritime roam on AS45700 from a vessel in the North Atlantic, tracking STARLINK-1008. Larger pointing residual from deck motion.",
     jitter: { az: -0.09, el: 0.07 },
     status: {
       deviceInfo: { ...UT, hardwareVersion: "rev3_proto2" },
@@ -166,12 +174,12 @@ const scenarios: Scenario[] = [
     egress: { asn: 45700, asOrg: "IDNIC-STARLINK-AS-ID", prefix: "103.152.0.0/22" },
   },
   {
-    id: "quorum-haikou-007",
-    capturedAt: "2026-09-20T15:30:03.210Z",
-    tle: "starlink-1008",
-    station: MERIDIAN_04,
+    id: "quorum-goonhilly-007",
+    capturedAt: "2026-09-20T20:05:03.210Z",
+    tle: "starlink-2034",
+    station: GOONHILLY_02,
     notes:
-      "Second station of a three-way quorum: a different terminal 210 km away sees the same STARLINK-1008 at the same second, from a different elevation and with a different Doppler shift.",
+      "Second station of a three-way quorum: a different terminal 460 km away sees the same STARLINK-1008 at the same second, from a different elevation and with a different Doppler shift.",
     jitter: { az: -0.12, el: 0.09 },
     status: {
       deviceInfo: { ...UT, id: "ut01000000-00000000-00b4d21a" },
@@ -188,12 +196,12 @@ const scenarios: Scenario[] = [
     egress: { asn: 14593, asOrg: "SPACEX-STARLINK", prefix: "98.97.12.0/24" },
   },
   {
-    id: "quorum-anyuan-009",
-    capturedAt: "2026-09-20T15:30:03.210Z",
-    tle: "starlink-1008",
-    station: MV_ANYUAN,
+    id: "quorum-pleumeur-009",
+    capturedAt: "2026-09-20T20:05:03.210Z",
+    tle: "starlink-2034",
+    station: PLEUMEUR_03,
     notes:
-      "Third station of the same quorum, at sea on AS45700 and 460 km from the first. Lowest elevation and the smallest Doppler of the three, because it is furthest from the ground track.",
+      "Third station of the same quorum, on the Brittany coast 640 km from the first. Lowest elevation of the three, because it is furthest from the ground track.",
     jitter: { az: 0.16, el: -0.1 },
     status: {
       deviceInfo: { ...UT, id: "ut01000000-00000000-00f7e330", hardwareVersion: "rev3_proto2" },
@@ -212,9 +220,9 @@ const scenarios: Scenario[] = [
   {
     id: "bad-asn-005",
     negative: true,
-    capturedAt: "2026-09-20T15:30:03.210Z",
-    tle: "starlink-1008",
-    station: GENESIS_01,
+    capturedAt: "2026-09-20T20:05:03.210Z",
+    tle: "starlink-2034",
+    station: VALENTIA_01,
     notes:
       "Negative: geometry is valid but the egress is terrestrial broadband (AS15169). The ASN allow-set must reject it.",
     jitter: { az: 0.08, el: -0.06 },
@@ -234,9 +242,9 @@ const scenarios: Scenario[] = [
   {
     id: "bad-geometry-006",
     negative: true,
-    capturedAt: "2026-09-20T15:30:03.210Z",
-    tle: "starlink-1008",
-    station: GENESIS_01,
+    capturedAt: "2026-09-20T20:05:03.210Z",
+    tle: "starlink-2034",
+    station: VALENTIA_01,
     notes:
       "Negative: Starlink ASN and a plausible-looking dish payload, but the boresight is swung 25 deg away from any satellite in the catalog. The SGP4 match must reject it.",
     jitter: { az: 0.08, el: -0.06 },
@@ -325,7 +333,7 @@ const attestations = positives.map(({ id, frame, station }) => {
  * of a quorum to agree on noradId, timestamp and catalogHash while reporting
  * its own elevation and Doppler, so this grouping is what exercises that.
  */
-const QUORUM_IDS = ["connected-001", "quorum-haikou-007", "quorum-anyuan-009"];
+const QUORUM_IDS = ["connected-001", "quorum-goonhilly-007", "quorum-pleumeur-009"];
 const quorumMembers = QUORUM_IDS.map((id) => {
   const entry = positives.find((p) => p.id === id);
   if (!entry) throw new Error(`quorum member ${id} is not a positive fixture`);
@@ -370,13 +378,13 @@ for (const r of q.reports) {
  * orbital mechanics fixes, and `checkPassShape` verifies that shape from the
  * three fields the chain publishes, with no element sets involved.
  */
-const TRACK_PEAK = Date.UTC(2026, 8, 20, 15, 30, 41);
+const TRACK_PEAK = Date.UTC(2026, 8, 20, 20, 6, 1);
 const TRACK_OFFSETS = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
 {
-  const tle = parse3le(readFileSync(join(root, "vectors/tle/starlink-1008.txt"), "utf8"));
+  const tle = parse3le(readFileSync(join(root, "vectors/tle/starlink-2034.txt"), "utf8"));
   const frames = TRACK_OFFSETS.map((offset, i) => {
     const at = new Date(TRACK_PEAK + offset * 1000);
-    const look = observe(tle, GENESIS_01, at);
+    const look = observe(tle, VALENTIA_01, at);
     if (look.elevationDeg <= 0) {
       throw new Error(`track sample ${offset}s is below the horizon`);
     }
@@ -389,10 +397,10 @@ const TRACK_OFFSETS = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
       source: "lan-grpc://192.168.100.1:9200",
       method: "SpaceX.API.Device.Device/Handle",
       station: {
-        id: GENESIS_01.id,
-        latDeg: GENESIS_01.latDeg,
-        lonDeg: GENESIS_01.lonDeg,
-        altKm: GENESIS_01.altKm,
+        id: VALENTIA_01.id,
+        latDeg: VALENTIA_01.latDeg,
+        lonDeg: VALENTIA_01.lonDeg,
+        altKm: VALENTIA_01.altKm,
       },
       expectNoradId: tle.noradId,
       dishGetStatus: {
@@ -413,9 +421,9 @@ const TRACK_OFFSETS = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
   });
 
   const track = {
-    id: "genesis-01-44714",
+    id: "valentia-01-47352",
     notes:
-      "One pass of STARLINK-1008 over GENESIS-01, sampled every 60 s. Used to check that a sequence of beacons forms a physically coherent pass, not just a bag of individually plausible instants.",
+      "One pass of STARLINK-2034 over VALENTIA-01, sampled every 60 s. Used to check that a sequence of beacons forms a physically coherent pass, not just a bag of individually plausible instants.",
     station: frames[0]!.station,
     expectNoradId: tle.noradId,
     frames,
@@ -427,10 +435,10 @@ const TRACK_OFFSETS = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
 
   const t = runPassTrack({
     captures: frames,
-    station: GENESIS_01,
+    station: VALENTIA_01,
     catalog,
     domain,
-    operator: operatorFor(GENESIS_01.id),
+    operator: operatorFor(VALENTIA_01.id),
   });
   console.log(
     `\nvectors/tracks/${track.id}.json  NORAD ${t.noradId}  ${t.shape.sampleCount} samples over ` +

@@ -21,9 +21,10 @@ const DOMAIN = {
 };
 
 const OPERATORS: Record<string, `0x${string}`> = {
-  "GENESIS-01": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "MERIDIAN-04": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "MV-ANYUAN": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+  "VALENTIA-01": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "GOONHILLY-02": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+  "PLEUMEUR-03": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+  "MV-FASTNET": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
 };
 
 const member = (name: string): QuorumMember => {
@@ -32,13 +33,13 @@ const member = (name: string): QuorumMember => {
   return { capture, station, operator: OPERATORS[station.id]! };
 };
 
-const MEMBERS = ["connected-001", "quorum-haikou-007", "quorum-anyuan-009"];
+const MEMBERS = ["connected-001", "quorum-goonhilly-007", "quorum-pleumeur-009"];
 const quorum = () => runQuorum({ members: MEMBERS.map(member), catalog: CATALOG, domain: DOMAIN });
 
 test("three stations resolve one sighting", () => {
   const q = quorum();
   assert.equal(q.reports.length, 3);
-  assert.equal(q.noradId, 44714);
+  assert.equal(q.noradId, 47352);
   for (const r of q.reports) {
     assert.equal(r.attestation.noradId, q.noradId);
     assert.equal(r.attestation.timestamp, q.timestamp);
@@ -86,7 +87,7 @@ test("the same station cannot appear twice", () => {
 
 test("two stations cannot share one operator address", () => {
   const a = member("connected-001");
-  const b = { ...member("quorum-haikou-007"), operator: a.operator };
+  const b = { ...member("quorum-goonhilly-007"), operator: a.operator };
   assert.throws(
     () => runQuorum({ members: [a, b], catalog: CATALOG, domain: DOMAIN }),
     /operator .* appears twice/,
@@ -113,9 +114,10 @@ test("a member observing a different satellite is rejected", () => {
 
 test("a member resolved against a different catalog is rejected", () => {
   const a = member("connected-001");
-  const b = member("quorum-haikou-007");
+  const b = member("quorum-goonhilly-007");
   const q = runQuorum({ members: [a, b], catalog: CATALOG, domain: DOMAIN });
-  const trimmed = CATALOG.filter((t) => t.noradId === 44714);
+  // keep the satellite the quorum resolved to, drop the rest
+  const trimmed = CATALOG.filter((t) => t.noradId === q.noradId);
   const other = runQuorum({ members: [a, b], catalog: trimmed, domain: DOMAIN });
   assert.notEqual(
     other.catalogHash,

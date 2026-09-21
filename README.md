@@ -92,20 +92,20 @@ SkyRelay feasibility pipeline
   eip712 domain   0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
   ok   catalog STARLINK-1008(44714) STARLINK-1526(46029) STARLINK-2034(47352)
   ok   bad-asn-005.json rejected: ASN 15169 is outside {14593, 45700}
-  ok   bad-geometry-006.json rejected: boresight 261.03/48.30 deg is 16.68 deg from
-       the nearest catalog satellite (NORAD 44714); tolerance is 2 deg
-  ok   connected-001.json       NORAD 44714  el=48.23°  fd=171617 Hz   SNR=8.70 dB  residual 0.136°
-  ok   handover-002.json        NORAD 44714  el=54.33°  fd=145345 Hz   SNR=7.40 dB  residual 0.093°
-  ok   obstructed-003.json      NORAD 46029  el=19.34°  fd=-226572 Hz  SNR=3.10 dB  residual 0.374°
-  ok   quorum-anyuan-009.json   NORAD 44714  el=25.88°  fd=116911 Hz   SNR=6.90 dB  residual 0.256°
-  ok   quorum-haikou-007.json   NORAD 44714  el=33.36°  fd=226851 Hz   SNR=8.10 dB  residual 0.195°
-  ok   roam-004.json            NORAD 47352  el=39.45°  fd=155900 Hz   SNR=9.20 dB  residual 0.348°
-  ok   quorum NORAD 44714 at t=1789918203: 3 stations agree, worst residual 0.256°
-       connected-001        GENESIS-01   el= 48.23°  fd=  171617 Hz  ASN 14593
-       quorum-haikou-007    MERIDIAN-04  el= 33.36°  fd=  226851 Hz  ASN 14593
-       quorum-anyuan-009    MV-ANYUAN    el= 25.88°  fd=  116911 Hz  ASN 45700
+  ok   bad-geometry-006.json rejected: boresight 259.08/47.28 deg is 16.91 deg from
+       the nearest catalog satellite (NORAD 47352); tolerance is 2 deg
+  ok   connected-001.json         NORAD 47352  el=47.24°  fd=173690 Hz   SNR=8.70 dB  residual 0.047°
+  ok   handover-002.json          NORAD 47352  el=51.95°  fd=155110 Hz   SNR=7.40 dB  residual 0.105°
+  ok   obstructed-003.json        NORAD 46029  el=15.07°  fd=-251763 Hz  SNR=3.10 dB  residual 0.251°
+  ok   quorum-goonhilly-007.json  NORAD 47352  el=30.35°  fd=220040 Hz   SNR=8.10 dB  residual 0.166°
+  ok   quorum-pleumeur-009.json   NORAD 47352  el=25.21°  fd=215966 Hz   SNR=6.90 dB  residual 0.193°
+  ok   roam-004.json              NORAD 44714  el=45.45°  fd=188940 Hz   SNR=9.20 dB  residual 0.396°
+  ok   quorum NORAD 47352 at t=1789934703: 3 stations agree, worst residual 0.193°
+       connected-001          VALENTIA-01   el= 47.24°  fd=  173690 Hz  ASN 14593
+       quorum-goonhilly-007   GOONHILLY-02  el= 30.35°  fd=  220040 Hz  ASN 14593
+       quorum-pleumeur-009    PLEUMEUR-03   el= 25.21°  fd=  215966 Hz  ASN 45700
   ok   quorum rejects a member from another second
-  ok   pass track NORAD 44714: 9 samples over 480 s, peak 73.46°, Doppler 271705 → -271319 Hz through zero
+  ok   pass track NORAD 47352: 9 samples over 480 s, peak 75.74°, Doppler 263245 → -263449 Hz through zero
   ok   pass shape verifies from chain-visible fields alone
   ok   forged Doppler rejected: Doppler must fall through a pass
 
@@ -144,7 +144,7 @@ The velocity row exists for a reason. An earlier revision carried a stray `xke` 
 
 `matchBoresight` asks one question: is there a satellite in the public catalog within 2° of where this terminal says it is pointing, at this exact second? It propagates every element set in the catalog, keeps only those above the horizon, takes the smallest angular separation from the reported boresight, and throws when even the best is outside tolerance.
 
-`bad-geometry-006.json` is `connected-001` with the boresight swung 25°. It is rejected at 16.68°.
+`bad-geometry-006.json` is `connected-001` with the boresight swung 25°. It is rejected at 16.91°.
 
 Where the 2° goes:
 
@@ -154,7 +154,7 @@ Where the 2° goes:
 | Terminal reporting quantisation and tracking error | ~0.1° |
 | SGP4 along-track error at a half-day-old element set | ~0.1° |
 
-The committed fixtures sit at 0.09°–0.38°, so there is roughly a 5× margin between a real capture and the tolerance, and a 44× margin between a real capture and the negative fixture.
+The committed fixtures sit at 0.05°–0.40°, so there is roughly a 5× margin between a real capture and the tolerance, and a 42× margin between the worst real capture and the negative fixture.
 
 ## Committing to the catalog
 
@@ -191,13 +191,13 @@ Two details that are load-bearing:
 
 A sighting can be attested by several stations at once. `runQuorum` resolves each member through the ordinary pipeline, then requires the members to agree on *what they saw* — same satellite, same second, same catalog — with distinct stations and distinct operators.
 
-The committed fixture is three stations seeing STARLINK-1008 at the same second:
+The committed fixture is three historic satellite ground-station sites seeing STARLINK-2034 at the same second:
 
 | Station | | Elevation | Doppler | ASN |
 |---|---|---|---|---|
-| GENESIS-01 | Sanya | 48.23° | +171 617 Hz | 14593 |
-| MERIDIAN-04 | Haikou, 210 km away | 33.36° | +226 851 Hz | 14593 |
-| MV-ANYUAN | at sea, 460 km away | 25.88° | +116 911 Hz | 45700 |
+| VALENTIA-01 | Valentia Island, Ireland | 47.24° | +173 690 Hz | 14593 |
+| GOONHILLY-02 | Goonhilly Downs, Cornwall — 460 km away | 30.35° | +220 040 Hz | 14593 |
+| PLEUMEUR-03 | Pleumeur-Bodou, Brittany — 640 km away | 25.21° | +215 966 Hz | 45700 |
 
 The three disagree on every number, and that is the point: they are hundreds of kilometres apart, so one orbit puts the satellite at three different elevations and closing speeds. `pnpm verify` fails if the committed quorum ever degenerates into three identical reports, because that would not be independent observation of anything.
 
@@ -217,7 +217,7 @@ Orbital mechanics fixes the shape of a pass, and the shape is checkable without 
 - range-rate rises monotonically from approach to recession, so the Doppler shift **falls strictly** and crosses zero at most once;
 - elevation rises to **exactly one** maximum and then falls.
 
-`checkPassShape` verifies both. The committed track is one STARLINK-1008 pass over Sanya, nine samples across 480 s, peaking at 73.46° with Doppler running 271 705 → −271 319 Hz straight through zero.
+`checkPassShape` verifies both. The committed track is one STARLINK-2034 pass over Valentia Island, nine samples across 480 s, peaking at 75.74° with Doppler running 263 245 → −263 449 Hz straight through zero. The quorum instant above is one sample inside this same pass.
 
 What makes this worth having is the input it needs:
 

@@ -1,16 +1,16 @@
 {
-  "id": "quorum-anyuan-009",
-  "capturedAt": "2026-09-20T15:30:03.210Z",
+  "id": "quorum-pleumeur-009",
+  "capturedAt": "2026-09-20T20:05:03.210Z",
   "source": "lan-grpc://192.168.100.1:9200",
   "method": "SpaceX.API.Device.Device/Handle",
-  "notes": "Third station of the same quorum, at sea on AS45700 and 460 km from the first. Lowest elevation and the smallest Doppler of the three, because it is furthest from the ground track.",
+  "notes": "Third station of the same quorum, on the Brittany coast 640 km from the first. Lowest elevation of the three, because it is furthest from the ground track.",
   "station": {
-    "id": "MV-ANYUAN",
-    "latDeg": 15.8,
-    "lonDeg": 113.2,
-    "altKm": 0.012
+    "id": "PLEUMEUR-03",
+    "latDeg": 48.79,
+    "lonDeg": -3.52,
+    "altKm": 0.06
   },
-  "expectNoradId": 44714,
+  "expectNoradId": 47352,
   "dishGetStatus": {
     "deviceInfo": {
       "id": "ut01000000-00000000-00f7e330",
@@ -29,8 +29,8 @@
     "obstructionStats": {
       "fractionObstructed": 0.0008
     },
-    "boresightAzimuthDeg": 279.415,
-    "boresightElevationDeg": 25.812
+    "boresightAzimuthDeg": 281.796,
+    "boresightElevationDeg": 25.154
   },
   "dishGetDiagnostics": {
     "id": "ut01000000-00000000-00f7e330",

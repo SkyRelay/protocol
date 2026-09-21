@@ -1,16 +1,16 @@
 {
   "id": "roam-004",
-  "capturedAt": "2026-09-20T18:53:42.500Z",
+  "capturedAt": "2026-09-20T06:39:42.500Z",
   "source": "lan-grpc://192.168.100.1:9200",
   "method": "SpaceX.API.Device.Device/Handle",
-  "notes": "Maritime roam on AS45700 from a vessel in the South China Sea, tracking STARLINK-2034. Larger pointing residual from deck motion.",
+  "notes": "Maritime roam on AS45700 from a vessel in the North Atlantic, tracking STARLINK-1008. Larger pointing residual from deck motion.",
   "station": {
-    "id": "MV-ANYUAN",
-    "latDeg": 15.8,
-    "lonDeg": 113.2,
+    "id": "MV-FASTNET",
+    "latDeg": 50.2,
+    "lonDeg": -12.6,
     "altKm": 0.012
   },
-  "expectNoradId": 47352,
+  "expectNoradId": 44714,
   "dishGetStatus": {
     "deviceInfo": {
       "id": "ut01000000-00000000-00e1c9f7",
@@ -29,8 +29,8 @@
     "obstructionStats": {
       "fractionObstructed": 0.0011
     },
-    "boresightAzimuthDeg": 284.23,
-    "boresightElevationDeg": 39.681
+    "boresightAzimuthDeg": 283.976,
+    "boresightElevationDeg": 45.821
   },
   "dishGetDiagnostics": {
     "id": "ut01000000-00000000-00e1c9f7",

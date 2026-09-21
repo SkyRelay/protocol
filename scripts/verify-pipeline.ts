@@ -151,7 +151,7 @@ if (rejected < Object.keys(EXPECTED_REJECTION).length) fail("not every negative 
   );
   try {
     runQuorum({
-      members: [members[0]!, { capture: stray, station: stray.station, operator: operatorFor("MERIDIAN-04") }],
+      members: [members[0]!, { capture: stray, station: stray.station, operator: operatorFor("GOONHILLY-02") }],
       catalog,
       domain,
     });
@@ -166,7 +166,7 @@ if (rejected < Object.keys(EXPECTED_REJECTION).length) fail("not every negative 
 // --- pass track: one station, one satellite, the whole pass ---
 {
   const track = JSON.parse(
-    readFileSync(join(root, "vectors/tracks/genesis-01-44714.json"), "utf8"),
+    readFileSync(join(root, "vectors/tracks/valentia-01-47352.json"), "utf8"),
   );
   const t = runPassTrack({
     captures: track.frames,

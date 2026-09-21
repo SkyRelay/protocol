@@ -30,7 +30,7 @@ That budget covers three things:
 | Terminal reporting quantisation and tracking error | ~0.1° |
 | SGP4 along-track error at a half-day-old element set | ~0.1° |
 
-The committed fixtures sit at 0.09°–0.38°; `bad-geometry-006` is 16.7° out and is rejected.
+The committed fixtures sit at 0.05°–0.40°; `bad-geometry-006` is 16.9° out and is rejected.
 
 This is the protocol's only check a forger cannot satisfy by editing a field. It still does not prove the capture came from Starlink silicon, or that the operator was at the station it declares.
 
@@ -70,13 +70,13 @@ Type hashes are computed in TypeScript (`packages/core/src/crypto/eip712.ts`) wi
 
 A sighting may be attested by several stations at once. `runQuorum` resolves each member through the ordinary pipeline and then requires the members to agree on *what they saw*: same `noradId`, same `timestamp`, same `catalogHash`, distinct stations, distinct operators.
 
-`vectors/eip712/attestations.json` carries a worked three-station quorum — Sanya, Haikou and a vessel in the South China Sea, all seeing STARLINK-1008 at the same second:
+`vectors/eip712/attestations.json` carries a worked three-station quorum — Valentia Island, Goonhilly Downs and Pleumeur-Bodou, three historic satellite ground-station sites on the Atlantic seaboard, all seeing STARLINK-2034 at the same second:
 
 | Station | Elevation | Doppler | ASN |
 |---|---|---|---|
-| GENESIS-01 | 48.23° | +171 617 Hz | 14593 |
-| MERIDIAN-04 | 33.36° | +226 851 Hz | 14593 |
-| MV-ANYUAN | 25.88° | +116 911 Hz | 45700 |
+| VALENTIA-01 | 47.24° | +173 690 Hz | 14593 |
+| GOONHILLY-02 | 30.35° | +220 040 Hz | 14593 |
+| PLEUMEUR-03 | 25.21° | +215 966 Hz | 45700 |
 
 The numbers differ because the stations are hundreds of kilometres apart; they are all consistent with one orbit because there is one orbit. A set in which every station reported the same figures would not be independent observation of anything, and `pnpm verify` fails if the committed quorum ever becomes that.
 
@@ -100,7 +100,7 @@ A quorum spreads one instant across several stations. A *track* spreads one stat
 
 These were checked against eight real passes covering three satellites, two stations and peak elevations from 6.5° to 74°; all eight satisfy them exactly.
 
-The committed track is `vectors/tracks/genesis-01-44714.json`: nine samples of STARLINK-1008 over GENESIS-01, 480 s apart end to end, peaking at 73.46°, Doppler 271 705 → −271 319 Hz through zero.
+The committed track is `vectors/tracks/valentia-01-47352.json`: nine samples of STARLINK-2034 over VALENTIA-01, 480 s apart end to end, peaking at 75.74°, Doppler 263 245 → −263 449 Hz through zero. The quorum above is one sample inside this same pass.
 
 ### Why this one is worth more than it looks
 

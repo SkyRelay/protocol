@@ -26,7 +26,7 @@ export {
   matchBoresight,
   angularSeparationDeg,
   DEFAULT_BORESIGHT_TOLERANCE_DEG,
-  GENESIS_01,
+  VALENTIA_01,
 } from "./orbit/pass.ts";
 export type { Station, Overhead, BoresightSighting } from "./orbit/pass.ts";
 export { dopplerHz } from "./orbit/doppler.ts";

@@ -19,14 +19,14 @@ export type Station = {
   altKm?: number;
 };
 
-export const GENESIS_01: Station = {
-  id: "GENESIS-01",
-  name: "南溟一号",
-  latDeg: 18.23,
-  lonDeg: 109.51,
-  altKm: 0.05,
+/** Reference station: Valentia Island, a transatlantic cable landing since 1866. */
+export const VALENTIA_01: Station = {
+  id: "VALENTIA-01",
+  name: "Valentia Island, Ireland",
+  latDeg: 51.93,
+  lonDeg: -10.35,
+  altKm: 0.02,
 };
-
 export type Overhead = {
   name: string;
   noradId: number;

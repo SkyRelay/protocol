@@ -1,14 +1,14 @@
 {
   "id": "obstructed-003",
-  "capturedAt": "2026-09-20T14:06:27.880Z",
+  "capturedAt": "2026-09-20T05:06:27.880Z",
   "source": "lan-grpc://192.168.100.1:9200",
   "method": "SpaceX.API.Device.Device/Handle",
   "notes": "Low elevation on STARLINK-1526 with a partially obstructed sky: SNR 3.1 dB, larger pointing residual, throughput collapsed.",
   "station": {
-    "id": "GENESIS-01",
-    "latDeg": 18.23,
-    "lonDeg": 109.51,
-    "altKm": 0.05
+    "id": "PLEUMEUR-03",
+    "latDeg": 48.79,
+    "lonDeg": -3.52,
+    "altKm": 0.06
   },
   "expectNoradId": 46029,
   "dishGetStatus": {
@@ -29,8 +29,8 @@
     "obstructionStats": {
       "fractionObstructed": 0.0913
     },
-    "boresightAzimuthDeg": 13.261,
-    "boresightElevationDeg": 19.085
+    "boresightAzimuthDeg": 134.623,
+    "boresightElevationDeg": 14.832
   },
   "dishGetDiagnostics": {
     "id": "ut01000000-00000000-00e1c9f7",
