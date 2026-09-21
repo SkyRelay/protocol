@@ -175,7 +175,9 @@ Nothing is added to `SkyRelayAttestation`. The chain cannot verify that any tran
 
 ### `ISkyRelay`
 
-The ABI an external contract imports is views only: `totalBeacons`, `getBeacon`, `beaconCountInWindow`, `wasClaimedSpaceRelayed`. `SkyRelayBeacon` declares `is ISkyRelay`. `MockCoverageEscrow` is the worked example of a consumer; it is a demonstration, not a product.
+The beacon ABI an external contract imports is views only: `totalBeacons`, `getBeacon`, `beaconCountInWindow`, `wasClaimedSpaceRelayed`. `SkyRelayBeacon` declares `is ISkyRelay`. `MockCoverageEscrow` is the worked example of a consumer of that ledger; it is a demonstration, not a product.
+
+`ISkyRelayEntropy`, in the same file, is the request surface for `SkyRelayEntropy`: `requestRandomness`, `randomWords`, `seedOf`, `reservice`. The beacon does not implement it. A verified sighting is an admission ticket, not entropy: the satellite contributes none.
 
 ## Bonds and equivocation
 
@@ -188,6 +190,60 @@ What is **not** equivocation: the same `noradId` and `timestamp` with **differen
 On a valid report the reporter receives `reporterBountyBps` of the bond, the vault receives the rest, the bond is zeroed, and the attester is permanently ineligible. The digest pair is recorded so the same report cannot collect a second bounty.
 
 Two lies are provable on chain with no orbit computation: this one, and naming a catalog nobody registered.
+
+## Commit-reveal randomness
+
+`SkyRelayEntropy` is a separate contract. A verified sighting is an admission ticket, not entropy: the satellite contributes none. A bonded key can open a commitment in a round only if it signed a beacon whose timestamp falls inside that round — that is the sybil resistance, and it is the whole of what the sighting contributes. The seed is the participants' secrets. The contract never reads a sighting's geometry.
+
+The beacon is secure if at least one participant is honest and reveals.
+
+The last revealer, having seen the other reveals, can withhold theirs: that drops their contribution and forces the seed the round would have had without them, and it does not let them pick a different one; the cost is `revealDeposit`, so manipulation is bounded by that deposit.
+
+This is not a VRF. If a consumer needs randomness with stronger guarantees than one honest participant, Chainlink VRF exists on BSC and is the appropriate tool.
+
+### Ordering
+
+Rounds are fixed epochs: `round = timestamp / roundSeconds`.
+
+| Action | When |
+|---|---|
+| Commit for round R | during round R-2; closes when R-1 begins |
+| Reveal for round R | during round R |
+| A request made during round R | served by round R+1 |
+
+The gap is two rounds on purpose. Commits for R+1 closed at the end of R-1, before the request existed, so no participant can pick a secret with the request in view. Reveals for R+1 happen after the request, so the requester cannot watch reveals accumulate and then decide whether to request. A one-round gap fails the second property: a requester could sit until most of the round's reveals were in and request only on a favourable partial seed.
+
+### Opening a commitment
+
+```solidity
+commitment = keccak256(abi.encode(secret, attester, round))
+```
+
+The sender and the round sit in the preimage, so a copied commitment cannot be opened by another address or in another round. `commit` accepts it only when `round == currentRound() + 2`, the caller is `bond.isActive`, `msg.value == revealDeposit`, and that address has not already committed for the round. A zero commitment is refused: the mapping uses zero as "none".
+
+`reveal` runs only during `round`. The stored commitment must equal `keccak256(abi.encode(secret, msg.sender, round))`. The sighting gate then requires a `beaconId` whose timestamp falls inside `round`, and `msg.sender` must be one of the attesters who signed it. The beacon stores that set as `signersHash` — one hash, not a slot per member — so the caller re-supplies the signer array in submission order, the same cold path as `submitRelayClaim`. On success the secret is XORed into the round accumulator (`accumulator ^= uint256(secret)`) and `revealDeposit` is refunded. XOR is commutative, so reveal order does not change the seed. The last revealer's only choice is to reveal, or to withhold and forfeit the deposit.
+
+`finalize` is permissionless once the round has ended.
+
+```solidity
+seed = keccak256(abi.encode(accumulator, round, revealCount))
+```
+
+If `revealCount == 0` the round finalizes unseeded. `seedOf` reverts `NoSeed` rather than return `bytes32(0)`. A `Finalized` event with `contributors == 0` is that case, not a seed of zero.
+
+```solidity
+words[i] = uint256(keccak256(abi.encode(seed, requestId, i)))
+```
+
+`randomWords` reverts when the serving round is not finalized or has no seed.
+
+Unrevealed deposits stay in the contract. After the round closes the owner sweeps `(commitCount - revealCount) * revealDeposit` to the vault — the accounted forfeits, not the contract balance — and emits `DepositForfeited` per address that committed and did not reveal.
+
+### An empty round
+
+A request whose serving round finalizes with no reveals does not resolve. It never reads as the zero seed. The requester may `reservice` it: the request is then served by `currentRound() + 1`, a later round whose reveals have not started, so the caller cannot pick a seed they have already watched. That later round's commits were not required to have closed before the original request — participants may have seen it — so a consumer who still needs the commit-before-request gap calls `requestRandomness` again instead. Anyone else calling `reservice` reverts; an outsider must not be able to pin the request to a round.
+
+`MockRandomnessConsumer` is the worked example. It requests a draw, waits, and settles on the first word. It is a demonstration, not a product.
 
 ## Governance
 

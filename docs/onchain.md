@@ -1,6 +1,6 @@
 # What lives on BNB Smart Chain
 
-Three contracts, deployed together, referenced by address. `SkyRelayBeacon` does not own the other two: replacing the bond or the registry is a new beacon, not an upgrade of this one. External contracts read the ledger through `ISkyRelay`; they do not write beacons.
+`SkyRelayBeacon` does not own the bond or the registry: replacing either is a new beacon, not an upgrade of this one. `SkyRelayEntropy` is a fourth contract. It holds the beacon and the bond by immutable address and does not write sightings. External contracts read the ledger through `ISkyRelay` and request randomness through `ISkyRelayEntropy`.
 
 Measured with `forge test --match-test <name> --gas-report --isolate`, solc 0.8.24, optimizer 200 runs, Foundry default EVM. These are the isolated call costs from the tests named below, not an average across reverts. A same-day `verifyAndRecord` figure is the cheaper of the two calls in that test (the `--gas-report` minimum). The first-of-day figure is the single call in the other test.
 
@@ -11,9 +11,13 @@ Measured with `forge test --match-test <name> --gas-report --isolate`, solc 0.8.
 | `SkyRelayBeacon` | EIP-712 verify, attester set, quorum, TTL, replay, `StationReport`, windowed counts, relay claims |
 | `SkyRelayBond` | native-BNB bond, unbonding delay, equivocation slash |
 | `CatalogRegistry` | `catalogHash → locator` hint; `isRegistered` |
-| `ISkyRelay` | read-only ABI a consumer imports; not a fourth deployment |
+| `SkyRelayEntropy` | commit-reveal beacon; a sighting admits a bonded signer, the secrets are the seed |
+| `ISkyRelay` | read-only beacon ABI a consumer imports |
+| `ISkyRelayEntropy` | `requestRandomness`, `randomWords`, `seedOf`, `reservice`; same file as `ISkyRelay` |
 
-`MockCoverageEscrow` under `contracts/test/mock/` is a demonstration, not a product: a funder locks BNB, the operator collects after `toTs` if `beaconCountInWindow` meets `minBeacons`.
+`MockCoverageEscrow` under `contracts/test/mock/` is a demonstration, not a product: a funder locks BNB, the operator collects after `toTs` if `beaconCountInWindow` meets `minBeacons`. `MockRandomnessConsumer` requests words from `SkyRelayEntropy` and settles on the first once the serving round has a seed.
+
+A verified sighting is an admission ticket, not entropy: the satellite contributes none. The beacon is secure if at least one participant is honest and reveals. The last revealer, having seen the other reveals, can withhold theirs: that drops their contribution and forces the seed the round would have had without them, and it does not let them pick a different one; the cost is `revealDeposit`, so manipulation is bounded by that deposit. This is not a VRF. If a consumer needs randomness with stronger guarantees than one honest participant, Chainlink VRF exists on BSC and is the appropriate tool.
 
 The `SkyRelayAttestation` type string is unchanged. Digests in `vectors/eip712/attestations.json` are still what `hashAttestation` produces. Relay claims use a **separate** type, `SkyRelayRelayClaim`.
 
@@ -75,6 +79,28 @@ Immutables: `minBond`, `unbondingPeriod`, `reporterBountyBps`, `vault`, `beacon`
 
 `CatalogEntry` is `{ uint64 registeredAt; string locator; }`. `isRegistered` is `registeredAt != 0`. The locator is an opaque string; the contract does not parse it.
 
+### `SkyRelayEntropy`
+
+Immutables: `roundSeconds`, `revealDeposit`, `vault`, `beacon`, `bond`.
+
+| Slot | Name | Type |
+|---|---|---|
+| 0 | `owner` | address |
+| 1 | `pendingOwner` | address |
+| 2 | `rounds` | mapping(uint64 ⇒ Round) |
+| 3 | `commitmentOf` | mapping(uint64 ⇒ mapping(address ⇒ bytes32)) |
+| 4 | `revealedIn` | mapping(uint64 ⇒ mapping(address ⇒ bool)) |
+| 5 | `_committers` | mapping(uint64 ⇒ address[]) |
+| 6 | `forfeitsSwept` | mapping(uint64 ⇒ bool) |
+| 7 | `requests` | mapping(bytes32 ⇒ Request) |
+| 8 | `requestNonce` | uint256 |
+
+`Round` is three slots: `accumulator`, then `commitCount` + `revealCount` + `finalized` (9 bytes), then `seed`. `Request` is one slot: `requester` (20) + `servingRound` (8) + `numWords` (4). Layout from `solc --storage-layout`, solc 0.8.24.
+
+`accumulator` is the XOR of revealed secrets. It is not a seed. `finalize` stores `keccak256(abi.encode(accumulator, round, revealCount))`. A finalized round with `revealCount == 0` leaves `seed` at zero, and `seedOf` reverts `NoSeed` — that zero word is not a seed.
+
+`_committers` exists so `sweepForfeited` can name each forfeit. The sweep sends `(commitCount - revealCount) * revealDeposit` to `vault`, not the contract balance.
+
 ## Events an indexer reads
 
 Rebuild a station's pass from `StationReport` alone (`timestamp`, `elevationMilliDeg`, `dopplerHz`) — that is what `checkPassShape` consumes, and it needs nothing else.
@@ -95,6 +121,12 @@ Rebuild a station's pass from `StationReport` alone (`timestamp`, `elevationMill
 | `PausedSet` | beacon | emergency stop |
 | `OwnershipTransferStarted` / `OwnershipTransferred` | beacon, registry | two-step owner move |
 | `RegistrarSet` | registry | who may call `register` |
+| `Committed(round, attester, commitment)` | entropy | a bonded key locked a secret for round R, during R-2 |
+| `Revealed(round, attester, beaconId)` | entropy | the secret was opened against a sighting in that round |
+| `Finalized(round, seed, contributors)` | entropy | `contributors == 0` means the round is unseeded, not that the seed is zero |
+| `DepositForfeited(round, attester, amount)` | entropy | an unrevealed `revealDeposit`, swept to the vault |
+| `RandomnessRequested(requestId, requester, servingRound, numWords)` | entropy | a request during R, served by R+1 |
+| `RequestReserviced(requestId, servingRound)` | entropy | an unseeded request pointed at a later round |
 
 ## Measured gas
 
@@ -115,6 +147,9 @@ Figures in this section come from `forge test --gas-report --isolate` and are tr
 | `bond()` first lock of `minBond` | same suites, first `bond` | 49 744 |
 | `CatalogRegistry.register` | first write of a hash | 94 754 |
 | `requestUnbond` | `test_requestUnbondDeactivatesImmediately` | 49 776 |
+| `SkyRelayEntropy.commit` — first commit of a round | `test_gasCommit` | 123 582 |
+| `SkyRelayEntropy.reveal` — one signer, deposit refunded | `test_gasReveal` | 97 969 |
+| `SkyRelayEntropy.finalize` — one reveal | `test_gasFinalize` | 53 273 |
 
 The three-member call is not 3× the single: the shared header (pause, TTL, quorum size, the three-slot `BeaconSummary` write) is paid once; each extra member adds a catalog lookup, an `isActive` call, a digest slot, a signature recover, a `StationReport`, and a day-bucket increment. Membership is one shared `signersHash`, not a slot per member.
 
@@ -139,8 +174,11 @@ Removing `submitter` deleted the fourth summary slot. One-attester first-of-day 
 | `slashEquivocation` | 0.000344 BNB | $0.21 |
 | `bond()` | 0.000149 BNB | $0.09 |
 | `register` | 0.000284 BNB | $0.17 |
+| `commit` | 0.000371 BNB | $0.22 |
+| `reveal` | 0.000294 BNB | $0.18 |
+| `finalize` | 0.000160 BNB | $0.10 |
 
-The bond itself (`minBond`, default 1 BNB in `Deploy.s.sol`) is the capital lock, separate from these fees. Controlling a quorum of k costs k × `minBond` locked, plus k keys the owner has admitted.
+The bond itself (`minBond`, default 1 BNB in `Deploy.s.sol`) is the capital lock, separate from these fees. Controlling a quorum of k costs k × `minBond` locked, plus k keys the owner has admitted. Withholding a reveal forfeits `revealDeposit` (default 0.01 BNB in `Deploy.s.sol`); that deposit, not the gas, is the price of the last-revealer abort.
 
 ## Cadence
 
@@ -160,3 +198,5 @@ The per-minute cadence does not survive any of those gas prices. It was a demo d
 It does not propagate an orbit, check a boresight, or decide that a catalog is the real CelesTrak file. It checks signatures, set membership, an active bond, a registered hash, TTL, replay, and the one fraud proof in `slashEquivocation`: same signer, same operator, same timestamp, different digests.
 
 It does not verify that any transaction took a satellite path. A relay claim is a bonded assertion bound to a sighting the chain *did* verify and to a bond that can be taken. `wasClaimedSpaceRelayed` returning true means a bonded attester signed a statement that this transaction was relayed during that sighting. The routing itself is the attester's word.
+
+`SkyRelayEntropy` does not read a sighting's geometry, and it does not treat the satellite as a source of entropy. A sighting admits a bonded signer to a round. The seed is `keccak256` of the XOR of the secrets that signer set actually revealed, the round, and the reveal count. A round nobody revealed into does not become `bytes32(0)`; `seedOf` reverts `NoSeed`. The beacon is secure if at least one participant is honest and reveals, and the last revealer can still force the seed that excludes them by forfeiting `revealDeposit`. That is not a VRF.

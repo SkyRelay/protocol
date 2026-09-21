@@ -46,3 +46,32 @@ interface ISkyRelay {
         view
         returns (bool claimed, address attester, uint64 claimedAt, uint32 noradId);
 }
+
+/// @title ISkyRelayEntropy
+/// @notice Request surface for the commit-reveal beacon.
+/// @dev A verified sighting is an admission ticket, not entropy: the satellite
+///      contributes none. The beacon is secure if at least one participant is
+///      honest and reveals. This is not a VRF. If a consumer needs randomness
+///      with stronger guarantees than one honest participant, Chainlink VRF
+///      exists on BSC and is the appropriate tool.
+interface ISkyRelayEntropy {
+    /// @notice Ask for `numWords` from the round after the current one.
+    /// @dev A call during round R is served by round R+1. Commits for R+1
+    ///      closed when R began, before this request; reveals for R+1 happen
+    ///      after it.
+    function requestRandomness(uint32 numWords) external returns (bytes32 requestId, uint64 servingRound);
+
+    /// @notice Words for a request whose serving round has finalized with a seed.
+    /// @dev `words[i] = uint256(keccak256(abi.encode(seed, requestId, i)))`.
+    ///      Reverts if that round is not finalized or finalized with no reveals.
+    function randomWords(bytes32 requestId) external view returns (uint256[] memory words);
+
+    /// @notice Seed of a finalized round that had at least one reveal.
+    /// @dev Reverts `NoSeed` when the round finalized with no reveals. The zero
+    ///      word is not a seed.
+    function seedOf(uint64 round) external view returns (bytes32 seed, uint32 contributors);
+
+    /// @notice Point `requestId` at a later round after its serving round
+    ///         finalized with no reveals.
+    function reservice(bytes32 requestId) external returns (uint64 servingRound);
+}

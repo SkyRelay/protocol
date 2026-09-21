@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 import {Script} from "forge-std/Script.sol";
 import {SkyRelayBeacon} from "../src/SkyRelayBeacon.sol";
 import {SkyRelayBond} from "../src/SkyRelayBond.sol";
+import {SkyRelayEntropy} from "../src/SkyRelayEntropy.sol";
 import {CatalogRegistry} from "../src/CatalogRegistry.sol";
 
 contract Deploy is Script {
@@ -14,6 +15,8 @@ contract Deploy is Script {
         uint256 minBond = vm.envOr("MIN_BOND", uint256(1 ether));
         uint64 unbondingPeriod = uint64(vm.envOr("UNBONDING_PERIOD", uint256(7 days)));
         uint16 reporterBountyBps = uint16(vm.envOr("REPORTER_BOUNTY_BPS", uint256(1000)));
+        uint64 roundSeconds = uint64(vm.envOr("ROUND_SECONDS", uint256(3600)));
+        uint256 revealDeposit = vm.envOr("REVEAL_DEPOSIT", uint256(0.01 ether));
 
         vm.startBroadcast();
 
@@ -29,6 +32,8 @@ contract Deploy is Script {
         SkyRelayBond bond_ = new SkyRelayBond(minBond, unbondingPeriod, reporterBountyBps, vault, predictedBeacon);
         SkyRelayBeacon beacon_ = new SkyRelayBeacon(owner, attester, vault, address(catalog), address(bond_));
         require(address(beacon_) == predictedBeacon, "beacon address mismatch");
+
+        new SkyRelayEntropy(owner, vault, address(bond_), address(beacon_), roundSeconds, revealDeposit);
 
         vm.stopBroadcast();
     }

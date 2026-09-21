@@ -27,6 +27,7 @@ An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS
 - [The on-chain verifier](#the-on-chain-verifier)
 - [BSC composability](#bsc-composability)
 - [Bonds and equivocation](#bonds-and-equivocation)
+- [Commit-reveal randomness](#commit-reveal-randomness)
 - [Governance](#governance)
 - [Running it against a real terminal](#running-it-against-a-real-terminal)
 - [Physics](#physics)
@@ -283,7 +284,7 @@ Deploy:
 cd contracts && OWNER=0x... ATTESTER=0x... ORBITAL_VAULT=0x... forge script script/Deploy.s.sol --rpc-url chapel --broadcast
 ```
 
-`MIN_BOND` (default 1 BNB), `UNBONDING_PERIOD` (default 7 days) and `REPORTER_BOUNTY_BPS` (default 1000 = 10 %) are read from the environment with those defaults. `foundry.toml` already carries `bsc` and `chapel` RPC aliases.
+`MIN_BOND` (default 1 BNB), `UNBONDING_PERIOD` (default 7 days) and `REPORTER_BOUNTY_BPS` (default 1000 = 10 %) are read from the environment with those defaults. `ROUND_SECONDS` (default 3600) and `REVEAL_DEPOSIT` (default 0.01 BNB) configure `SkyRelayEntropy`. The deposit is the price of withholding a reveal. `foundry.toml` already carries `bsc` and `chapel` RPC aliases.
 
 ## BSC composability
 
@@ -313,6 +314,24 @@ What is **not** equivocation, and does not slash: two attestations with the same
 On a valid report, `slashEquivocation` pays `reporterBountyBps` of the bond to the reporter, the rest to the vault, zeros the bond, and marks the attester permanently ineligible. The same digest pair cannot be reported for a second bounty.
 
 Controlling a quorum of *k* now costs *k* bonds, not *k* free keys. A bonded attester with a real station that never contradicts itself can still lie about the physics. Bonding raises the cost of lying; it does not establish truth. The fraud proof that would establish it does not exist here.
+
+## Commit-reveal randomness
+
+`SkyRelayEntropy` is a commit-reveal beacon beside the verifier, not inside it. A verified sighting is an admission ticket, not entropy: the satellite contributes none. A bonded key can reveal a secret in a round only if it signed a beacon whose timestamp falls in that round. The seed is the XOR of the secrets that were actually revealed.
+
+The beacon is secure if at least one participant is honest and reveals.
+
+The last revealer, having seen the other reveals, can withhold theirs: that drops their contribution and forces the seed the round would have had without them, and it does not let them pick a different one; the cost is `revealDeposit`, so manipulation is bounded by that deposit.
+
+This is not a VRF. If a consumer needs randomness with stronger guarantees than one honest participant, Chainlink VRF exists on BSC and is the appropriate tool.
+
+Rounds are `timestamp / roundSeconds`. Commits for round R are submitted during round R-2 and close when R-1 begins. Reveals for round R happen during round R. A consumer requesting during round R is served by round R+1.
+
+That spacing is the security property. Commits for R+1 closed at the end of R-1, before the request existed, so no participant can pick a secret with the request in view. Reveals for R+1 happen after the request, so the requester cannot watch reveals accumulate and then decide whether to request. A one-round gap fails the second property: a requester could sit until most of the round's reveals were in and request only on a favourable partial seed.
+
+The commitment is `keccak256(abi.encode(secret, attester, round))`, so it cannot be opened by another address or in another round. The sighting check uses the signer set already stored as `signersHash`: the reveal re-supplies the array, the same way a relay claim does. `finalize` hashes `(accumulator, round, revealCount)`. A round with no reveals finalizes unseeded — `seedOf` reverts `NoSeed` and does not return `bytes32(0)`. A request pointing at that round can be `reservice`d onto a later round, or the consumer can call `requestRandomness` again; a fresh request is the one that keeps the commit-before-request gap. Unrevealed deposits are swept to the vault by the owner after the round closes.
+
+`MockRandomnessConsumer` requests a draw and settles on the words. It is a demonstration, not a product. Storage and gas: [`docs/onchain.md`](docs/onchain.md).
 
 ## Governance
 
@@ -391,12 +410,13 @@ Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 5
 
 ## Repository map
 
-About 3 230 lines of source, no runtime dependencies.
+About 3 620 lines of source, no runtime dependencies.
 
 | Path | Lines | What it does |
 |---|---|---|
 | `contracts/src/SkyRelayBeacon.sol` | 584 | Quorum verifier, windowed counts, relay claims, attester registry |
-| `contracts/src/interfaces/ISkyRelay.sol` | 37 | Read-only ABI other BSC contracts import |
+| `contracts/src/SkyRelayEntropy.sol` | 346 | Commit-reveal beacon; a sighting admits, the secrets are the seed |
+| `contracts/src/interfaces/ISkyRelay.sol` | 77 | Beacon views, plus the entropy request surface |
 | `contracts/src/SkyRelayBond.sol` | 190 | Native-BNB bonds, equivocation slash |
 | `contracts/src/CatalogRegistry.sol` | 91 | `catalogHash` → locator; `isRegistered` |
 | `packages/core/src/orbit/sgp4.ts` | 327 | Near-earth SGP4 initialiser and propagator, TEME output |
@@ -420,7 +440,7 @@ About 3 230 lines of source, no runtime dependencies.
 
 ## Tests
 
-**58 TypeScript** (`node:test`) and **89 Solidity** (Foundry, across six suites, including fuzz).
+**58 TypeScript** (`node:test`) and **121 Solidity** (Foundry, across seven suites, including fuzz).
 
 The ones that carry weight:
 
@@ -453,6 +473,13 @@ The ones that carry weight:
 | `test_relayClaimFromBondedNonSignerReverts` | a stranger attaching a claim to someone else's sighting |
 | `test_wasClaimedSpaceRelayedTrueAndFalseReturnTheAttester` | treating a routing claim as a proof, or hiding whose word it is |
 | `test_coverageEscrowPaysWhenWindowIsFilled` / `…RefundsWhenWindowClosesShort` | a consumer that cannot actually read the ledger |
+| `test_commitInTheWrongRoundReverts` / `test_commitFromUnbondedAddressReverts` | a commit outside round R-2, or from a key with no active bond |
+| `test_revealCallerDidNotSignBeaconReverts` | a reveal whose sighting the caller did not sign |
+| `test_twoHonestParticipantsSeedIsXor` | a seed that is not `keccak(s1 ^ s2, round, 2)` |
+| `test_withheldRevealForfeitsAndRemainingSeedStands` | a last revealer withholding for free, or blocking the round |
+| `test_roundWithNoRevealsFinalizesUnseeded` | an empty round returning `bytes32(0)` as a seed |
+| `test_requestDuringRoundIsServedByTheNextRound` | a request during R being served by R, or readable before R+1 finalizes |
+| `testFuzz_distinctSecretsGiveDistinctSeeds` | two different secret pairs collapsing to one seed |
 
 ## What this proves / does not prove
 
@@ -460,7 +487,7 @@ The ones that carry weight:
 
 **The one geometric binding:** a capture is only attested if some satellite in the public catalog was actually where the terminal says it was pointing, at the second the attestation commits to — and the attestation names, by hash, the element set that claim was computed from, a hash the registry must already hold.
 
-**Does not prove:** that a given JSON was signed by SpaceX silicon; that the operator was physically at the station it declares; that the numbers in a never-contradicted attestation are true; that a transaction took a satellite path; that BSC validators live in orbit; affiliation with SpaceX/Starlink.
+**Does not prove:** that a given JSON was signed by SpaceX silicon; that the operator was physically at the station it declares; that the numbers in a never-contradicted attestation are true; that a transaction took a satellite path; that BSC validators live in orbit; that the commit-reveal beacon is a VRF; affiliation with SpaceX/Starlink.
 
 ## Known limits
 
@@ -475,6 +502,7 @@ The ones that carry weight:
 - **`totalEnergy` is a placeholder.** Summing SNR in millidB is not a physical energy and should not be used as a reward basis as-is.
 - **The fixtures are synthetic.** The dish payloads are schema-faithful reconstructions; only the geometry is real. `vectors/README.md` says exactly which parts are which.
 - **A relay claim is the attester's word about routing.** The chain verifies the sighting and the signature. It cannot tell whether any transaction took a satellite path; a tx hash carries no route information.
+- **The entropy beacon is not a VRF, and the satellite contributes no entropy.** A verified sighting only admits a bonded signer. The beacon is secure if at least one participant is honest and reveals. The last revealer, having seen the other reveals, can withhold theirs: that drops their contribution and forces the seed the round would have had without them, and it does not let them pick a different one; the cost is `revealDeposit`, so manipulation is bounded by that deposit. Stronger guarantees than one honest participant are what Chainlink VRF, which exists on BSC, is for.
 
 ## What would make this stronger
 
@@ -501,6 +529,8 @@ Landed since the first release: the catalog commitment, the quorum mechanism (th
 **Does bonding make the numbers true?** No. It makes keys expensive to use, and it makes one kind of lie (contradicting yourself about one station-second) slashable. A consistent physics lie from a bonded station is still a signature the contract accepts.
 
 **Does a relay claim mean the transaction went through Starlink?** No. It means a bonded attester who signed that sighting asserted that it did. The chain verifies the sighting and the signature. The routing is their word.
+
+**Does the randomness come from the satellite?** No. A verified sighting is an admission ticket. The satellite contributes no entropy. The seed is the participants' committed secrets. The beacon is secure if at least one participant is honest and reveals. The last revealer, having seen the other reveals, can withhold theirs: that drops their contribution and forces the seed the round would have had without them, and it does not let them pick a different one; the cost is `revealDeposit`, so manipulation is bounded by that deposit. This is not a VRF. If a consumer needs randomness with stronger guarantees than one honest participant, Chainlink VRF exists on BSC and is the appropriate tool.
 
 **Why implement SGP4 and Keccak from scratch instead of using a library?** For Keccak, so the digest the pipeline produces can be *compared* against solc rather than trusted — two implementations sharing a dependency prove nothing. For SGP4, so the WGS-72 constants, the frame conversions and the error budget are all visible and testable in one place. Both are pinned against external references.
 
