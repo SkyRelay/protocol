@@ -1,5 +1,6 @@
 import { DEG2RAD, MINUTES_PER_DAY, TWO_PI } from "./constants.ts";
 import { epochToJulian } from "./coords.ts";
+import { keccak256Hex, utf8 } from "../crypto/keccak.ts";
 
 export type Tle = {
   name: string;
@@ -122,4 +123,28 @@ export function tleAnglesRad(tle: Tle) {
     argpo: tle.argPerigeeDeg * DEG2RAD,
     mo: tle.meanAnomalyDeg * DEG2RAD,
   };
+}
+
+/**
+ * Commit to the exact element sets a sighting was resolved against.
+ *
+ * Without this the chain sees only a NORAD id, so an attestation computed from
+ * a doctored element set is indistinguishable from one computed against the
+ * real catalog — the "consistent with a real orbit" claim would rest entirely
+ * on the operator using the real orbit. Publishing the hash lets a verifier
+ * re-fetch the archived CelesTrak elements for that epoch and recompute.
+ *
+ * Canonical form: entries sorted by NORAD id, each as its two 69-column lines,
+ * everything joined by newlines. Sorting makes the hash independent of the
+ * order files happened to be read in.
+ */
+export function catalogHash(tles: readonly Tle[]): `0x${string}` {
+  if (tles.length === 0) throw new Error("cannot hash an empty catalog");
+  const sorted = [...tles].sort((a, b) => a.noradId - b.noradId);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i]!.noradId === sorted[i - 1]!.noradId) {
+      throw new Error(`duplicate NORAD id ${sorted[i]!.noradId} in catalog`);
+    }
+  }
+  return keccak256Hex(utf8(sorted.map((t) => `${t.line1}\n${t.line2}`).join("\n")));
 }
