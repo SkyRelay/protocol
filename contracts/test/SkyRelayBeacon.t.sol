@@ -108,13 +108,23 @@ contract SkyRelayBeaconTest is Test {
         beacon.setQuorumThreshold(2);
     }
 
-    /// @dev Gas of one `verifyAndRecord`, from the callee side, so the
-    ///      comparison is the call itself and not the test's memory.
+    /// @dev Gas of one `verifyAndRecord`, measured as a `gasleft()` delta
+    ///      around the call. This is plain EVM arithmetic on purpose: it is
+    ///      the execution of the call and excludes the 21,000 intrinsic cost
+    ///      and calldata, so it does NOT match the transaction-level figures
+    ///      in `docs/onchain.md`, which come from `--gas-report --isolate`.
+    ///      An earlier version used `vm.lastCallGas().gasTotalUsed`. That
+    ///      cheatcode changed accounting between forge 1.7 and 1.8 — the same
+    ///      unchanged call measured 111,522 on one and 175,142 on the other —
+    ///      which silently moved the ceilings below and broke CI. A ceiling is
+    ///      only meaningful in a unit that the toolchain cannot redefine.
     function _gasOf(SkyRelayBeacon.SkyRelayAttestation memory a, uint256 pk) internal returns (uint256 gasUsed) {
         bytes[] memory sigs = _one(_sign(pk, a));
+        SkyRelayBeacon.SkyRelayAttestation[] memory atts = _one(a);
         vm.prank(a.operator);
-        beacon.verifyAndRecord(_one(a), sigs);
-        gasUsed = vm.lastCallGas().gasTotalUsed;
+        uint256 before = gasleft();
+        beacon.verifyAndRecord(atts, sigs);
+        gasUsed = before - gasleft();
     }
 
     function _gasOfQuorum(SkyRelayBeacon.SkyRelayAttestation[] memory atts, uint256[3] memory pks)
@@ -126,8 +136,9 @@ contract SkyRelayBeaconTest is Test {
             sigs[i] = _sign(pks[i], atts[i]);
         }
         vm.prank(atts[0].operator);
+        uint256 before = gasleft();
         beacon.verifyAndRecord(atts, sigs);
-        gasUsed = vm.lastCallGas().gasTotalUsed;
+        gasUsed = before - gasleft();
     }
 
     // ── the single-attester case ────────────────────────────────────────────
@@ -145,8 +156,9 @@ contract SkyRelayBeaconTest is Test {
         assertEq(beacon.userBeaconCount(opA), 1);
     }
 
-    /// @dev `_gasOf` on 2026-09-21 measured 111_522. This sits 12_478 above it.
-    uint256 internal constant WARM_SINGLE_CEILING = 124_000;
+    /// @dev `_gasOf` on 2026-09-21, forge 1.7.1, measured 113_285. This sits
+    ///      12_715 above it. Raising it means accepting that number.
+    uint256 internal constant WARM_SINGLE_CEILING = 126_000;
 
     /// @dev Opening a day writes `beaconsByDay` from zero (a cold SSTORE).
     ///      The next sighting that day updates the slot and must cost
@@ -354,8 +366,9 @@ contract SkyRelayBeaconTest is Test {
         assertEq(beacon.userBeaconCount(opC), 1);
     }
 
-    /// @dev `_gasOfQuorum` on 2026-09-21 measured 191_095. This sits 12_905 above it.
-    uint256 internal constant WARM_QUORUM3_CEILING = 204_000;
+    /// @dev `_gasOfQuorum` on 2026-09-21, forge 1.7.1, measured 194_843. This
+    ///      sits 13_157 above it. Raising it means accepting that number.
+    uint256 internal constant WARM_QUORUM3_CEILING = 208_000;
 
     /// @dev Same split as `test_secondBeaconSameDayIsCheaper`, for a full quorum.
     function test_secondQuorumOfThreeSameDayIsCheaper() public {

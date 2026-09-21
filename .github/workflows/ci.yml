@@ -22,7 +22,13 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      # Pinned on purpose. Every gas figure in docs/onchain.md was measured on
+      # this version, and forge changes gas accounting between releases: the
+      # same unchanged call measures differently on 1.7 and 1.8. A floating
+      # toolchain makes the published numbers unreproducible.
       - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
 
       - run: pnpm install --frozen-lockfile
 
