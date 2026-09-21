@@ -53,7 +53,15 @@ contract SkyRelayBeacon is ISkyRelay {
     uint256 public constant MAX_QUORUM = 16;
 
     /// @notice Inclusive day-bucket cap for `beaconCountInWindow`. One SLOAD per day.
+    /// @dev Safety bound only. On-chain settlement should use
+    ///      `RECOMMENDED_WINDOW_DAYS` and split longer periods into several claims;
+    ///      a full-year read costs ~900k gas.
     uint256 public constant MAX_WINDOW_DAYS = 366;
+
+    /// @notice Settlement window that stays cheap enough for an on-chain escrow.
+    /// @dev ~75k gas for the view. Longer settlement should be split into
+    ///      several claims; do not silently raise the hard cap callers rely on.
+    uint256 public constant RECOMMENDED_WINDOW_DAYS = 30;
 
     bytes32 public constant ATTESTATION_TYPEHASH = keccak256(
         "SkyRelayAttestation(address operator,bytes32 telemetryHash,bytes32 catalogHash,uint32 noradId,int32 elevationMilliDeg,int32 dopplerHz,uint32 snrMilliDb,uint32 asn,uint64 timestamp)"
@@ -106,8 +114,6 @@ contract SkyRelayBeacon is ISkyRelay {
     /// @notice operator => UTC day (attestation timestamp / 86400) => count.
     mapping(address => mapping(uint32 => uint32)) public beaconsByDay;
     mapping(uint256 => BeaconSummary) private _summaries;
-    /// @notice Attesters whose signature was accepted for this beacon.
-    mapping(uint256 => mapping(address => bool)) public beaconSignedBy;
 
     struct StoredRelayClaim {
         bytes32 relayedTxRoot;
@@ -201,6 +207,7 @@ contract SkyRelayBeacon is ISkyRelay {
     error WindowTooLong();
     error UnknownBeacon();
     error NotBeaconSigner();
+    error SignersMismatch();
     error AlreadyClaimed();
 
     modifier onlyOwner() {
@@ -395,7 +402,6 @@ contract SkyRelayBeacon is ISkyRelay {
                 if (signers[j] == signer) revert DuplicateSigner();
             }
             signers[i] = signer;
-            beaconSignedBy[beaconId][signer] = true;
 
             if (att.operator == msg.sender) senderIsOperator = true;
 
@@ -421,9 +427,9 @@ contract SkyRelayBeacon is ISkyRelay {
         _summaries[beaconId] = BeaconSummary({
             noradId: first.noradId,
             timestamp: first.timestamp,
-            catalogHash: first.catalogHash,
             quorum: uint8(n),
-            submitter: msg.sender
+            catalogHash: first.catalogHash,
+            signersHash: keccak256(abi.encodePacked(signers))
         });
 
         if (msg.value > 0) {
@@ -444,7 +450,8 @@ contract SkyRelayBeacon is ISkyRelay {
     ///         timestamps fall in `[fromTs, toTs]`, bucketed by UTC day
     ///         (`timestamp / 86400`). Inclusive of both endpoints.
     /// @dev Roughly one SLOAD per day in the window. Reverts `WindowTooLong`
-    ///      if the inclusive day-bucket span exceeds 366.
+    ///      if the inclusive day-bucket span exceeds `MAX_WINDOW_DAYS` (366).
+    ///      Prefer `RECOMMENDED_WINDOW_DAYS` (30) for on-chain settlement.
     function beaconCountInWindow(address operator, uint64 fromTs, uint64 toTs) external view returns (uint256 count) {
         if (toTs < fromTs) revert BadWindow();
         uint256 fromDay = uint256(fromTs / 86400);
@@ -457,6 +464,13 @@ contract SkyRelayBeacon is ISkyRelay {
 
     /// @notice A bonded attester asserts that `txCount` transactions, committed
     ///         as `relayedTxRoot`, were relayed during a previously verified sighting.
+    /// @param signers The recovered signer set for `beaconId`, in the same order
+    ///                as the original `verifyAndRecord` submission. The hot path
+    ///                stores one `signersHash` instead of one slot per member;
+    ///                the cold path re-supplies the array and pays the check.
+    ///                Order-sensitive: a permutation hashes differently. A
+    ///                claimant who does not know the set can rebuild it from the
+    ///                `StationReport` / `BeaconBroadcast` events.
     /// @dev The chain verifies the sighting and the signature, and takes the
     ///      operator's word for the routing. A transaction hash carries no
     ///      route information. One claim per `(beaconId, attester)`.
@@ -465,13 +479,24 @@ contract SkyRelayBeacon is ISkyRelay {
         bytes32 relayedTxRoot,
         uint32 txCount,
         uint64 timestamp,
-        bytes calldata signature
+        bytes calldata signature,
+        address[] calldata signers
     ) external {
         if (beaconId == 0 || beaconId > totalBeacons) revert UnknownBeacon();
+        if (keccak256(abi.encodePacked(signers)) != _summaries[beaconId].signersHash) {
+            revert SignersMismatch();
+        }
         bytes32 digest = hashRelayClaim(beaconId, relayedTxRoot, txCount, timestamp);
         address signer = _recover(digest, signature);
         if (!bond.isActive(signer)) revert NotBonded();
-        if (!beaconSignedBy[beaconId][signer]) revert NotBeaconSigner();
+        bool inSet;
+        for (uint256 i = 0; i < signers.length; i++) {
+            if (signers[i] == signer) {
+                inSet = true;
+                break;
+            }
+        }
+        if (!inSet) revert NotBeaconSigner();
         StoredRelayClaim storage existing = _relayClaims[beaconId][signer];
         if (existing.exists) revert AlreadyClaimed();
         _relayClaims[beaconId][signer] =

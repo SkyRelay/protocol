@@ -2,7 +2,7 @@
 
 Three contracts, deployed together, referenced by address. `SkyRelayBeacon` does not own the other two: replacing the bond or the registry is a new beacon, not an upgrade of this one. External contracts read the ledger through `ISkyRelay`; they do not write beacons.
 
-Measured with `forge test --match-test <name> --gas-report --isolate`, solc 0.8.24, optimizer 200 runs, Foundry default EVM. These are the isolated call costs from the tests named below, not an average across reverts.
+Measured with `forge test --match-test <name> --gas-report --isolate`, solc 0.8.24, optimizer 200 runs, Foundry default EVM. These are the isolated call costs from the tests named below, not an average across reverts. A same-day `verifyAndRecord` figure is the cheaper of the two calls in that test (the `--gas-report` minimum). The first-of-day figure is the single call in the other test.
 
 ## Contracts
 
@@ -42,15 +42,14 @@ Immutables: `orbitalVault`, `catalogRegistry`, `bond`, plus the EIP-712 name/ver
 | 9 |  | `usedDigest` | mapping(bytes32 ⇒ bool) |
 | 10 |  | `beaconsByDay` | mapping(address ⇒ mapping(uint32 ⇒ uint32)) |
 | 11 |  | `_summaries` | mapping(uint256 ⇒ BeaconSummary) |
-| 12 |  | `beaconSignedBy` | mapping(uint256 ⇒ mapping(address ⇒ bool)) |
-| 13 |  | `_relayClaims` | mapping(uint256 ⇒ mapping(address ⇒ StoredRelayClaim)) |
-| 14 |  | `_claimers` | mapping(uint256 ⇒ address[]) |
+| 12 |  | `_relayClaims` | mapping(uint256 ⇒ mapping(address ⇒ StoredRelayClaim)) |
+| 13 |  | `_claimers` | mapping(uint256 ⇒ address[]) |
 
 `beaconsByDay` keys `uint32(attestation.timestamp / 86400)` — the sighting's time, not `block.timestamp`. `userBeaconCount` remains a lifetime total; a consumer that cares about a window asks `beaconCountInWindow`.
 
-`BeaconSummary` is three slots per id (`noradId`+`timestamp`, `catalogHash`, `quorum`+`submitter`). That is the packing the ABI struct allows: `catalogHash` is 32 bytes, so it cannot share a slot.
+`BeaconSummary` is three slots per id. `noradId`, `timestamp` and `quorum` share the first (13 bytes); `catalogHash` and `signersHash` each take a slot. `submitter` is not stored: nothing on chain read it, and an indexer takes it from `BeaconBroadcast`. The address is 20 bytes, so it does not fit beside those three fields — putting it back adds a fourth slot and a cold SSTORE on every sighting. `signersHash` is `keccak256(abi.encodePacked(signers))` over the recovered signers in submission order — order-sensitive. The hot path stores that one hash; `submitRelayClaim` re-supplies the array, checks it, and requires the claim signer appear in it.
 
-`StoredRelayClaim` is two slots (`relayedTxRoot`, then `claimedAt`+`txCount`+`exists`). One claim per `(beaconId, attester)`. `beaconSignedBy` is the set that signed that beacon, recorded in `verifyAndRecord`, so a stranger cannot attach a claim to someone else's sighting.
+`StoredRelayClaim` is two slots (`relayedTxRoot`, then `claimedAt`+`txCount`+`exists`). One claim per `(beaconId, attester)`.
 
 ### `SkyRelayBond`
 
@@ -99,11 +98,16 @@ Rebuild a station's pass from `StationReport` alone (`timestamp`, `elevationMill
 
 ## Measured gas
 
+Figures in this section come from `forge test --gas-report --isolate` and are transaction-level, including the 21 000 intrinsic gas and cold account access.
+
+| Call | Tests | First of day | Same day, subsequent |
+|---|---|---|---|
+| `verifyAndRecord` — one attester | `test_recordsABeacon`, `test_secondBeaconSameDayIsCheaper` | 243 530 | 175 142 |
+| `verifyAndRecord` — three-member quorum | `test_quorumOfThreeIsRecordedOnce`, `test_secondQuorumOfThreeSameDayIsCheaper` | 434 271 | 297 483 |
+
 | Call | Test | Gas |
 |---|---|---|
-| `verifyAndRecord` — one attester | `test_recordsABeacon` | 265 529 |
-| `verifyAndRecord` — three-member quorum | `test_quorumOfThreeIsRecordedOnce` | 500 610 |
-| `submitRelayClaim` — first claim on a beacon | `test_submitRelayClaim` | 135 638 |
+| `submitRelayClaim` — first claim on a beacon | `test_submitRelayClaim` | 137 211 |
 | `beaconCountInWindow` — 1 day | `test_beaconCountInWindow_1day` | 3 587 |
 | `beaconCountInWindow` — 30 days | `test_beaconCountInWindow_30days` | 74 927 |
 | `beaconCountInWindow` — 366 days | `test_beaconCountInWindow_366days` | 901 487 |
@@ -112,11 +116,13 @@ Rebuild a station's pass from `StationReport` alone (`timestamp`, `elevationMill
 | `CatalogRegistry.register` | first write of a hash | 94 754 |
 | `requestUnbond` | `test_requestUnbondDeactivatesImmediately` | 49 776 |
 
-The three-member call is not 3× the single: the shared header (pause, TTL, quorum size, `BeaconSummary` write) is paid once; each extra member adds a catalog lookup, an `isActive` call, a digest slot, a signature recover, a `StationReport`, a day-bucket increment, and a `beaconSignedBy` bit.
+The three-member call is not 3× the single: the shared header (pause, TTL, quorum size, the three-slot `BeaconSummary` write) is paid once; each extra member adds a catalog lookup, an `isActive` call, a digest slot, a signature recover, a `StationReport`, and a day-bucket increment. Membership is one shared `signersHash`, not a slot per member.
 
-Against the previous one-attester figure (152 435), the new writes add **113 094**: about 67 350 for the three-slot `BeaconSummary`, and about 45 744 per member for `beaconsByDay` plus `beaconSignedBy`. The three-member delta against 296 028 is 204 582, which is that same summary cost plus three member writes.
+The two `verifyAndRecord` figures differ because a storage slot going from zero pays a cold SSTORE — 20 000 gas, plus 2 100 when the slot is cold — and updating a non-zero slot costs 2 900. The gap is 17 100 per slot. The first beacon in the table is also the first beacon on the contract, so the zero slots are `beaconsByDay` and `userBeaconCount` for each operator, plus `totalBeacons` and `totalEnergy`: four slots for one attester (68 400) and eight for a quorum of three (136 800). The measured gaps, 68 388 and 136 788, are 12 gas of calldata off that arithmetic. A later beacon the same day updates those slots. On a later day the only new zero slot is that day's `beaconsByDay`, 17 100 gas per operator. That is the once-a-day surcharge. `userBeaconCount` is paid once per operator, and `totalBeacons` / `totalEnergy` once per contract.
 
-`beaconCountInWindow` is one SLOAD per day in the inclusive span (~2 460 gas/day after the 1-day baseline). The 366-day cap is what keeps that loop bounded.
+Removing `submitter` deleted the fourth summary slot. One-attester first-of-day went from 265 719 to 243 530 (−22 189); the three-member call from 456 461 to 434 271 (−22 190). `submitRelayClaim` is unchanged at 137 211.
+
+`beaconCountInWindow` is one SLOAD per day in the inclusive span (~2 460 gas/day after the 1-day baseline). `MAX_WINDOW_DAYS` stays 366 so a long off-chain read stays legal; `RECOMMENDED_WINDOW_DAYS` is 30 (~75k gas). A year on chain is ~900k and close to unusable for an escrow — split longer settlement into several claims.
 
 ## Cost arithmetic
 
@@ -124,15 +130,30 @@ Against the previous one-attester figure (152 435), the new writes add **113 094
 
 | Call | BNB at 3 gwei | USD at $600 / BNB |
 |---|---|---|
-| `verifyAndRecord` (1) | 0.000797 BNB | $0.48 |
-| `verifyAndRecord` (3) | 0.001502 BNB | $0.90 |
-| `submitRelayClaim` | 0.000407 BNB | $0.24 |
+| `verifyAndRecord` (1), first of day | 0.000731 BNB | $0.44 |
+| `verifyAndRecord` (1), same day | 0.000525 BNB | $0.32 |
+| `verifyAndRecord` (3), first of day | 0.001303 BNB | $0.78 |
+| `verifyAndRecord` (3), same day | 0.000892 BNB | $0.54 |
+| `submitRelayClaim` | 0.000412 BNB | $0.25 |
 | `beaconCountInWindow` (30 days) | 0.000225 BNB | $0.13 |
 | `slashEquivocation` | 0.000344 BNB | $0.21 |
 | `bond()` | 0.000149 BNB | $0.09 |
 | `register` | 0.000284 BNB | $0.17 |
 
 The bond itself (`minBond`, default 1 BNB in `Deploy.s.sol`) is the capital lock, separate from these fees. Controlling a quorum of k costs k × `minBond` locked, plus k keys the owner has admitted.
+
+## Cadence
+
+The table above is per call. A station that anchors every minute pays the same-day figure 525 600 times a year. A station that anchors once per pass — a few minutes of visibility, then nothing until the next orbit — pays it roughly 35 000 times a year. The first beacon of each UTC day also pays the day-bucket surcharge, 17 100 gas per operator (51 300 for this quorum). Over 365 days that is 18 724 500 gas: 0.00187 BNB ($1.12) at 0.1 gwei, 0.0187 BNB ($11.23) at 1 gwei, 0.0562 BNB ($33.70) at 3 gwei.
+
+**Assumptions, not measurements:** the three-member same-day gas above (297 483), BNB at $600, and the gas prices in the columns. Recompute when any of those move.
+
+| Cadence | writes / year | at 0.1 gwei | at 1 gwei | at 3 gwei |
+|---|---|---|---|---|
+| one beacon / minute | 525 600 | 15.6 BNB / $9 380 | 156 BNB / $93 800 | 469 BNB / $281 000 |
+| one beacon / pass | ~35 000 | 1.04 BNB / $625 | 10.4 BNB / $6 250 | 31.2 BNB / $18 700 |
+
+The per-minute cadence does not survive any of those gas prices. It was a demo default, not a protocol requirement. The anchoring rate has to be derived from cost.
 
 ## What the chain does not do
 

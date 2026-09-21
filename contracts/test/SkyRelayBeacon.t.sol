@@ -108,6 +108,28 @@ contract SkyRelayBeaconTest is Test {
         beacon.setQuorumThreshold(2);
     }
 
+    /// @dev Gas of one `verifyAndRecord`, from the callee side, so the
+    ///      comparison is the call itself and not the test's memory.
+    function _gasOf(SkyRelayBeacon.SkyRelayAttestation memory a, uint256 pk) internal returns (uint256 gasUsed) {
+        bytes[] memory sigs = _one(_sign(pk, a));
+        vm.prank(a.operator);
+        beacon.verifyAndRecord(_one(a), sigs);
+        gasUsed = vm.lastCallGas().gasTotalUsed;
+    }
+
+    function _gasOfQuorum(SkyRelayBeacon.SkyRelayAttestation[] memory atts, uint256[3] memory pks)
+        internal
+        returns (uint256 gasUsed)
+    {
+        bytes[] memory sigs = new bytes[](atts.length);
+        for (uint256 i = 0; i < atts.length; i++) {
+            sigs[i] = _sign(pks[i], atts[i]);
+        }
+        vm.prank(atts[0].operator);
+        beacon.verifyAndRecord(atts, sigs);
+        gasUsed = vm.lastCallGas().gasTotalUsed;
+    }
+
     // ── the single-attester case ────────────────────────────────────────────
 
     function test_recordsABeacon() public {
@@ -121,6 +143,32 @@ contract SkyRelayBeaconTest is Test {
         assertEq(beacon.totalBeacons(), 1);
         assertEq(beacon.totalEnergy(), 8700);
         assertEq(beacon.userBeaconCount(opA), 1);
+    }
+
+    /// @dev `_gasOf` on 2026-09-21 measured 111_522. This sits 12_478 above it.
+    uint256 internal constant WARM_SINGLE_CEILING = 124_000;
+
+    /// @dev Opening a day writes `beaconsByDay` from zero (a cold SSTORE).
+    ///      The next sighting that day updates the slot and must cost
+    ///      materially less — a fresh slot on the warm path closes the gap.
+    function test_secondBeaconSameDayIsCheaper() public {
+        uint64 ts = uint64(block.timestamp);
+        SkyRelayBeacon.SkyRelayAttestation memory first = _att(opA);
+        first.timestamp = ts;
+        first.telemetryHash = keccak256("sighting-1");
+        SkyRelayBeacon.SkyRelayAttestation memory second = _att(opA);
+        second.timestamp = ts;
+        second.telemetryHash = keccak256("sighting-2");
+
+        uint256 cold = _gasOf(first, PK_A);
+        uint256 warm = _gasOf(second, PK_A);
+
+        assertEq(beacon.beaconsByDay(opA, uint32(ts / 86400)), 2);
+        // A delta between two runs of the same build is blind to a cost both
+        // runs pay, so the ceiling is the part that catches regressions and the
+        // delta only proves the warm path is warm.
+        assertLt(warm, cold - 60_000, "warm path is not actually warmer");
+        assertLt(warm, WARM_SINGLE_CEILING, "warm-path cost regressed");
     }
 
     function test_forwardsValueToVault() public {
@@ -304,6 +352,35 @@ contract SkyRelayBeaconTest is Test {
         assertEq(beacon.userBeaconCount(opA), 1);
         assertEq(beacon.userBeaconCount(opB), 1);
         assertEq(beacon.userBeaconCount(opC), 1);
+    }
+
+    /// @dev `_gasOfQuorum` on 2026-09-21 measured 191_095. This sits 12_905 above it.
+    uint256 internal constant WARM_QUORUM3_CEILING = 204_000;
+
+    /// @dev Same split as `test_secondBeaconSameDayIsCheaper`, for a full quorum.
+    function test_secondQuorumOfThreeSameDayIsCheaper() public {
+        _enableQuorumOfTwo();
+        vm.prank(owner);
+        beacon.setQuorumThreshold(3);
+
+        uint64 ts = uint64(block.timestamp);
+        SkyRelayBeacon.SkyRelayAttestation[] memory first = _triple();
+        SkyRelayBeacon.SkyRelayAttestation[] memory second = _triple();
+        for (uint256 i = 0; i < 3; i++) {
+            first[i].timestamp = ts;
+            second[i].timestamp = ts;
+            second[i].telemetryHash = keccak256(abi.encodePacked("sighting-2", second[i].operator));
+        }
+
+        uint256 cold = _gasOfQuorum(first, [PK_A, PK_B, PK_C]);
+        uint256 warm = _gasOfQuorum(second, [PK_A, PK_B, PK_C]);
+
+        assertEq(beacon.beaconsByDay(opA, uint32(ts / 86400)), 2);
+        // A delta between two runs of the same build is blind to a cost both
+        // runs pay, so the ceiling is the part that catches regressions and the
+        // delta only proves the warm path is warm.
+        assertLt(warm, cold - 60_000, "warm path is not actually warmer");
+        assertLt(warm, WARM_QUORUM3_CEILING, "warm-path cost regressed");
     }
 
     function test_quorumOfTwoIsRecordedOnce() public {

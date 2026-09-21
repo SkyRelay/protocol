@@ -129,6 +129,24 @@ contract ComposabilityTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
+    function _signers(address a) internal pure returns (address[] memory out) {
+        out = new address[](1);
+        out[0] = a;
+    }
+
+    function _signers(address a, address b) internal pure returns (address[] memory out) {
+        out = new address[](2);
+        out[0] = a;
+        out[1] = b;
+    }
+
+    function _signers(address a, address b, address c) internal pure returns (address[] memory out) {
+        out = new address[](3);
+        out[0] = a;
+        out[1] = b;
+        out[2] = c;
+    }
+
     function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
         return a < b ? keccak256(abi.encodePacked(a, b)) : keccak256(abi.encodePacked(b, a));
     }
@@ -255,7 +273,30 @@ contract ComposabilityTest is Test {
         assertEq(s.timestamp, uint64(block.timestamp));
         assertEq(s.catalogHash, CATALOG);
         assertEq(s.quorum, 1);
-        assertEq(s.submitter, opA);
+        assertEq(s.signersHash, keccak256(abi.encodePacked(_signers(vm.addr(PK_A)))));
+    }
+
+    function test_getBeaconExposesSignersHashMatchingSubmittedSet() public {
+        _enableQuorumOfTwo();
+        SkyRelayBeacon.SkyRelayAttestation[] memory atts = new SkyRelayBeacon.SkyRelayAttestation[](3);
+        atts[0] = _att(opA);
+        atts[1] = _att(opB);
+        atts[1].elevationMilliDeg = 31_804;
+        atts[1].dopplerHz = 96_210;
+        atts[2] = _att(opC);
+        atts[2].elevationMilliDeg = 22_100;
+        atts[2].dopplerHz = 50_000;
+        bytes[] memory sigs = new bytes[](3);
+        sigs[0] = _sign(PK_A, atts[0]);
+        sigs[1] = _sign(PK_B, atts[1]);
+        sigs[2] = _sign(PK_C, atts[2]);
+        vm.prank(opA);
+        uint256 id = beacon.verifyAndRecord(atts, sigs);
+
+        address[] memory expected = _signers(vm.addr(PK_A), vm.addr(PK_B), vm.addr(PK_C));
+        ISkyRelay.BeaconSummary memory s = beacon.getBeacon(id);
+        assertEq(s.signersHash, keccak256(abi.encodePacked(expected)));
+        assertEq(s.quorum, 3);
     }
 
     function test_getBeaconUnknownReverts() public {
@@ -289,10 +330,11 @@ contract ComposabilityTest is Test {
         bytes32 root = _merkleRoot(leaves);
         uint64 ts = uint64(block.timestamp);
         bytes memory sig = _signClaim(PK_A, id, root, 2, ts);
+        address[] memory signers = _signers(vm.addr(PK_A));
 
         vm.expectEmit(true, true, false, true);
         emit SkyRelayBeacon.RelayClaimed(id, vm.addr(PK_A), root, 2, ts);
-        beacon.submitRelayClaim(id, root, 2, ts, sig);
+        beacon.submitRelayClaim(id, root, 2, ts, sig, signers);
 
         bytes32[] memory proof = _merkleProof(leaves, 0);
         (bool claimed, address attester, uint64 claimedAt, uint32 noradId) =
@@ -307,7 +349,91 @@ contract ComposabilityTest is Test {
         uint256 id = _record(opA, PK_A, uint64(block.timestamp));
         bytes32 root = keccak256("one-tx");
         uint64 ts = uint64(block.timestamp);
-        beacon.submitRelayClaim(id, root, 1, ts, _signClaim(PK_A, id, root, 1, ts));
+        beacon.submitRelayClaim(id, root, 1, ts, _signClaim(PK_A, id, root, 1, ts), _signers(vm.addr(PK_A)));
+    }
+
+    function test_relayClaimWithCorrectSignerArraySucceeds() public {
+        _enableQuorumOfTwo();
+        SkyRelayBeacon.SkyRelayAttestation[] memory atts = new SkyRelayBeacon.SkyRelayAttestation[](2);
+        atts[0] = _att(opA);
+        atts[1] = _att(opB);
+        atts[1].elevationMilliDeg = 31_804;
+        atts[1].dopplerHz = 96_210;
+        bytes[] memory sigs = new bytes[](2);
+        sigs[0] = _sign(PK_A, atts[0]);
+        sigs[1] = _sign(PK_B, atts[1]);
+        vm.prank(opA);
+        uint256 id = beacon.verifyAndRecord(atts, sigs);
+
+        bytes32 root = keccak256("root");
+        uint64 ts = uint64(block.timestamp);
+        address[] memory signers = _signers(vm.addr(PK_A), vm.addr(PK_B));
+        beacon.submitRelayClaim(id, root, 1, ts, _signClaim(PK_B, id, root, 1, ts), signers);
+    }
+
+    function test_relayClaimWithReorderedSignerArrayReverts() public {
+        _enableQuorumOfTwo();
+        SkyRelayBeacon.SkyRelayAttestation[] memory atts = new SkyRelayBeacon.SkyRelayAttestation[](2);
+        atts[0] = _att(opA);
+        atts[1] = _att(opB);
+        atts[1].elevationMilliDeg = 31_804;
+        atts[1].dopplerHz = 96_210;
+        bytes[] memory sigs = new bytes[](2);
+        sigs[0] = _sign(PK_A, atts[0]);
+        sigs[1] = _sign(PK_B, atts[1]);
+        vm.prank(opA);
+        uint256 id = beacon.verifyAndRecord(atts, sigs);
+
+        bytes32 root = keccak256("root");
+        uint64 ts = uint64(block.timestamp);
+        // Hash is order-sensitive: [B, A] ≠ [A, B].
+        address[] memory reordered = _signers(vm.addr(PK_B), vm.addr(PK_A));
+        bytes memory sig = _signClaim(PK_A, id, root, 1, ts);
+        vm.expectRevert(SkyRelayBeacon.SignersMismatch.selector);
+        beacon.submitRelayClaim(id, root, 1, ts, sig, reordered);
+    }
+
+    function test_relayClaimWithExtraAddressInSignerArrayReverts() public {
+        _enableQuorumOfTwo();
+        SkyRelayBeacon.SkyRelayAttestation[] memory atts = new SkyRelayBeacon.SkyRelayAttestation[](2);
+        atts[0] = _att(opA);
+        atts[1] = _att(opB);
+        atts[1].elevationMilliDeg = 31_804;
+        atts[1].dopplerHz = 96_210;
+        bytes[] memory sigs = new bytes[](2);
+        sigs[0] = _sign(PK_A, atts[0]);
+        sigs[1] = _sign(PK_B, atts[1]);
+        vm.prank(opA);
+        uint256 id = beacon.verifyAndRecord(atts, sigs);
+
+        bytes32 root = keccak256("root");
+        uint64 ts = uint64(block.timestamp);
+        address[] memory extra = _signers(vm.addr(PK_A), vm.addr(PK_B), vm.addr(PK_C));
+        bytes memory sig = _signClaim(PK_A, id, root, 1, ts);
+        vm.expectRevert(SkyRelayBeacon.SignersMismatch.selector);
+        beacon.submitRelayClaim(id, root, 1, ts, sig, extra);
+    }
+
+    function test_relayClaimSignerAbsentFromCorrectArrayReverts() public {
+        _enableQuorumOfTwo();
+        SkyRelayBeacon.SkyRelayAttestation[] memory atts = new SkyRelayBeacon.SkyRelayAttestation[](2);
+        atts[0] = _att(opA);
+        atts[1] = _att(opB);
+        atts[1].elevationMilliDeg = 31_804;
+        atts[1].dopplerHz = 96_210;
+        bytes[] memory sigs = new bytes[](2);
+        sigs[0] = _sign(PK_A, atts[0]);
+        sigs[1] = _sign(PK_B, atts[1]);
+        vm.prank(opA);
+        uint256 id = beacon.verifyAndRecord(atts, sigs);
+
+        bytes32 root = keccak256("root");
+        uint64 ts = uint64(block.timestamp);
+        // Array hashes correctly, but PK_C did not sign the beacon.
+        address[] memory signers = _signers(vm.addr(PK_A), vm.addr(PK_B));
+        bytes memory sig = _signClaim(PK_C, id, root, 1, ts);
+        vm.expectRevert(SkyRelayBeacon.NotBeaconSigner.selector);
+        beacon.submitRelayClaim(id, root, 1, ts, sig, signers);
     }
 
     function test_relayClaimFromBondedNonSignerReverts() public {
@@ -326,8 +452,9 @@ contract ComposabilityTest is Test {
         bytes32 root = keccak256("root");
         uint64 ts = uint64(block.timestamp);
         bytes memory sig = _signClaim(PK_C, id, root, 1, ts);
+        address[] memory signers = _signers(vm.addr(PK_A), vm.addr(PK_B));
         vm.expectRevert(SkyRelayBeacon.NotBeaconSigner.selector);
-        beacon.submitRelayClaim(id, root, 1, ts, sig);
+        beacon.submitRelayClaim(id, root, 1, ts, sig, signers);
     }
 
     function test_relayClaimFromUnbondedAddressReverts() public {
@@ -338,7 +465,7 @@ contract ComposabilityTest is Test {
         uint64 ts = uint64(block.timestamp);
         bytes memory sig = _signClaim(PK_A, id, root, 1, ts);
         vm.expectRevert(SkyRelayBeacon.NotBonded.selector);
-        beacon.submitRelayClaim(id, root, 1, ts, sig);
+        beacon.submitRelayClaim(id, root, 1, ts, sig, _signers(vm.addr(PK_A)));
     }
 
     function test_relayClaimFromNeverBondedAddressReverts() public {
@@ -347,7 +474,7 @@ contract ComposabilityTest is Test {
         uint64 ts = uint64(block.timestamp);
         bytes memory sig = _signClaim(PK_OUTSIDER, id, root, 1, ts);
         vm.expectRevert(SkyRelayBeacon.NotBonded.selector);
-        beacon.submitRelayClaim(id, root, 1, ts, sig);
+        beacon.submitRelayClaim(id, root, 1, ts, sig, _signers(vm.addr(PK_A)));
     }
 
     function test_duplicateRelayClaimReverts() public {
@@ -355,15 +482,16 @@ contract ComposabilityTest is Test {
         bytes32 root = keccak256("root");
         uint64 ts = uint64(block.timestamp);
         bytes memory sig = _signClaim(PK_A, id, root, 1, ts);
-        beacon.submitRelayClaim(id, root, 1, ts, sig);
+        address[] memory signers = _signers(vm.addr(PK_A));
+        beacon.submitRelayClaim(id, root, 1, ts, sig, signers);
         vm.expectRevert(SkyRelayBeacon.AlreadyClaimed.selector);
-        beacon.submitRelayClaim(id, root, 1, ts, sig);
+        beacon.submitRelayClaim(id, root, 1, ts, sig, signers);
     }
 
     function test_relayClaimUnknownBeaconReverts() public {
         bytes32 root = keccak256("root");
         vm.expectRevert(SkyRelayBeacon.UnknownBeacon.selector);
-        beacon.submitRelayClaim(1, root, 1, uint64(block.timestamp), hex"00");
+        beacon.submitRelayClaim(1, root, 1, uint64(block.timestamp), hex"00", _signers(vm.addr(PK_A)));
     }
 
     function test_wasClaimedSpaceRelayedTrueAndFalseReturnTheAttester() public {
@@ -375,7 +503,7 @@ contract ComposabilityTest is Test {
         leaves[1] = keccak256("other");
         bytes32 root = _merkleRoot(leaves);
         uint64 ts = uint64(block.timestamp);
-        beacon.submitRelayClaim(id, root, 2, ts, _signClaim(PK_A, id, root, 2, ts));
+        beacon.submitRelayClaim(id, root, 2, ts, _signClaim(PK_A, id, root, 2, ts), _signers(vm.addr(PK_A)));
 
         bytes32[] memory proof = _merkleProof(leaves, 0);
         _assertClaim(inside, id, proof, true, ts);
@@ -398,7 +526,7 @@ contract ComposabilityTest is Test {
         uint256 id = _record(opA, PK_A, uint64(block.timestamp));
         bytes32 leaf = keccak256("only");
         uint64 ts = uint64(block.timestamp);
-        beacon.submitRelayClaim(id, leaf, 1, ts, _signClaim(PK_A, id, leaf, 1, ts));
+        beacon.submitRelayClaim(id, leaf, 1, ts, _signClaim(PK_A, id, leaf, 1, ts), _signers(vm.addr(PK_A)));
         bytes32[] memory empty = new bytes32[](0);
         (bool claimed, address attester,,) = beacon.wasClaimedSpaceRelayed(leaf, id, empty);
         assertTrue(claimed);
@@ -441,7 +569,7 @@ contract ComposabilityTest is Test {
 
     function _submit(uint256 id, bytes32 root, uint32 txCount) internal {
         uint64 ts = uint64(block.timestamp);
-        beacon.submitRelayClaim(id, root, txCount, ts, _signClaim(PK_A, id, root, txCount, ts));
+        beacon.submitRelayClaim(id, root, txCount, ts, _signClaim(PK_A, id, root, txCount, ts), _signers(vm.addr(PK_A)));
     }
 
     // ── coverage escrow ─────────────────────────────────────────────────────

@@ -131,7 +131,7 @@ function beaconCountInWindow(address operator, uint64 fromTs, uint64 toTs)
 
 function submitRelayClaim(
     uint256 beaconId, bytes32 relayedTxRoot, uint32 txCount,
-    uint64 timestamp, bytes calldata signature
+    uint64 timestamp, bytes calldata signature, address[] calldata signers
 ) external;
 
 function wasClaimedSpaceRelayed(bytes32 txHash, uint256 beaconId, bytes32[] calldata proof)
@@ -147,7 +147,7 @@ function wasClaimedSpaceRelayed(bytes32 txHash, uint256 beaconId, bytes32[] call
 7. each digest unused, then marked used
 8. each signature recovers to a **registered** attester whose bond `isActive`, and signers are pairwise distinct
 9. `msg.sender` is one of the operators
-10. record: one beacon, one `BeaconSummary`, one `StationReport` per member, day-bucket and signer-set writes, `msg.value` forwarded to `orbitalVault`
+10. record: one beacon, one `BeaconSummary` (including `signersHash`), one `StationReport` per member, day-bucket write, `msg.value` forwarded to `orbitalVault`
 
 `isAttester` is still required. Bonding is necessary but not sufficient: anyone can lock BNB, and that must not admit them to the set. The owner still decides who is in.
 
@@ -159,7 +159,7 @@ The EIP-712 type string is unchanged. Storage, events and measured gas: [`onchai
 
 ### Windowed counts
 
-`userBeaconCount` is a lifetime total. A consumer that needs "did this operator produce N verified sightings between T1 and T2" asks `beaconCountInWindow`, which sums `beaconsByDay[operator][timestamp / 86400]` from `fromTs` to `toTs` inclusive. The bucket is the attestation timestamp — when the sighting happened — not `block.timestamp`. The loop is bounded: a span of more than 366 day-buckets reverts `WindowTooLong`. Gas is roughly one SLOAD per day.
+`userBeaconCount` is a lifetime total. A consumer that needs "did this operator produce N verified sightings between T1 and T2" asks `beaconCountInWindow`, which sums `beaconsByDay[operator][timestamp / 86400]` from `fromTs` to `toTs` inclusive. The bucket is the attestation timestamp — when the sighting happened — not `block.timestamp`. The loop is bounded: a span of more than 366 day-buckets reverts `WindowTooLong`. Gas is roughly one SLOAD per day. `RECOMMENDED_WINDOW_DAYS` is 30; longer on-chain settlement should be split into several claims.
 
 ### Relay claims
 
@@ -169,7 +169,7 @@ An operator whose terminal relayed BSC transactions during a pass can say so, wi
 SkyRelayRelayClaim(uint256 beaconId,bytes32 relayedTxRoot,uint32 txCount,uint64 timestamp)
 ```
 
-Nothing is added to `SkyRelayAttestation`. The chain cannot verify that any transaction took a satellite path — a tx hash carries no route information. What it can do is bind the assertion to a sighting it *did* verify, to a signer who was in that beacon's attester set, and to a bond that can be taken.
+Nothing is added to `SkyRelayAttestation`. The chain cannot verify that any transaction took a satellite path — a tx hash carries no route information. What it can do is bind the assertion to a sighting it *did* verify, to a signer who was in that beacon's attester set, and to a bond that can be taken. Membership is proven on the cold path: `verifyAndRecord` stores `signersHash = keccak256(abi.encodePacked(signers))` (order-sensitive); `submitRelayClaim` re-supplies the array, checks the hash, and requires the claim signer appear in it.
 
 `wasClaimedSpaceRelayed` checks a sorted-pair Merkle inclusion proof against the stored root. `claimed` being true means exactly: a bonded attester signed a statement that this transaction was relayed during a sighting the chain verified geometrically. The routing is the attester's word.
 

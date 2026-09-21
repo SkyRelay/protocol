@@ -256,7 +256,7 @@ function beaconCountInWindow(address operator, uint64 fromTs, uint64 toTs)
 
 function submitRelayClaim(
     uint256 beaconId, bytes32 relayedTxRoot, uint32 txCount,
-    uint64 timestamp, bytes calldata signature
+    uint64 timestamp, bytes calldata signature, address[] calldata signers
 ) external;
 
 function wasClaimedSpaceRelayed(bytes32 txHash, uint256 beaconId, bytes32[] calldata proof)
@@ -296,11 +296,11 @@ ISkyRelay public immutable relay;                 // the deployed SkyRelayBeacon
 uint256 n = relay.beaconCountInWindow(operator, fromTs, toTs);
 ```
 
-`beaconCountInWindow` sums UTC-day buckets of verified sightings, using the attestation timestamp (when the sighting happened), inclusive of both ends, and reverts if the span exceeds 366 days.
+`beaconCountInWindow` sums UTC-day buckets of verified sightings, using the attestation timestamp (when the sighting happened), inclusive of both ends, and reverts if the span exceeds 366 days. Prefer `RECOMMENDED_WINDOW_DAYS` (30) on chain; split longer settlement into several claims.
 
 `MockCoverageEscrow` (`contracts/test/mock/`) is the worked example. A funder locks BNB for an operator and a window; after `toTs` the operator collects only if that count meets `minBeacons`, otherwise the funder refunds. It is a demonstration, not a product.
 
-An operator whose terminal relayed BSC transactions during a pass can say so, with `submitRelayClaim`. The chain verifies the *sighting* and the *signature*, and takes the operator's word for the routing. A transaction hash carries no route information. `wasClaimedSpaceRelayed` returning true means a bonded attester signed a statement that this transaction was relayed during a sighting the chain verified geometrically.
+An operator whose terminal relayed BSC transactions during a pass can say so, with `submitRelayClaim`. The caller passes the beacon's signer array so the contract can check it against the stored `signersHash` — the hot path records one hash instead of one slot per member. The chain verifies the *sighting* and the *signature*, and takes the operator's word for the routing. A transaction hash carries no route information. `wasClaimedSpaceRelayed` returning true means a bonded attester signed a statement that this transaction was relayed during a sighting the chain verified geometrically.
 
 ## Bonds and equivocation
 
