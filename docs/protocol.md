@@ -4,7 +4,7 @@
 
 ```
  Starlink UT gRPC JSON        physical filter        SGP4 boresight match        chain
-192.168.100.1:9200  →  SNR, handover, AS14593  →  NORAD, ε, f_d  →  EIP-712  →  SkyRelayBeacon
+192.168.100.1:9200  →  SNR, handover, AS14593  →  NORAD, ε, f_d, catalog  →  EIP-712  →  SkyRelayBeacon
 ```
 
 Four functions, four failure modes:
@@ -34,12 +34,21 @@ The committed fixtures sit at 0.09°–0.38°; `bad-geometry-006` is 16.7° out 
 
 This is the protocol's only check a forger cannot satisfy by editing a field. It still does not prove the capture came from Starlink silicon, or that the operator was at the station it declares.
 
+## Committing to the catalog
+
+`catalogHash` is `keccak256` over the element sets the sighting was resolved against: entries sorted by NORAD id, each as its two 69-column lines, joined by newlines. Sorting makes the hash independent of the order files were read in.
+
+Without it the chain sees only a NORAD id, and an attestation computed from a doctored element set is indistinguishable from one computed against the real catalog — "consistent with a real orbit" would rest entirely on the operator having used the real orbit. With it, a verifier can re-fetch the archived CelesTrak elements for that epoch, recompute the hash, and recompute the geometry.
+
+What it does **not** do is prove the committed catalog is the true one. It makes the choice auditable after the fact, not enforced at signing time.
+
 ## EIP-712
 
 ```
 SkyRelayAttestation(
   address operator,
   bytes32 telemetryHash,
+  bytes32 catalogHash,
   uint32  noradId,
   int32   elevationMilliDeg,
   int32   dopplerHz,
@@ -51,39 +60,88 @@ SkyRelayAttestation(
 
 Domain: `name = "SkyRelay"`, `version = "1"`, `chainId`, `verifyingContract`.
 
-`operator` is the only address the contract accepts as `msg.sender`. Without it the digest says nothing about who broadcasts the beacon, and anyone watching the mempool could copy a signed attestation, take the credit, and leave the rightful sender reverting on `Replay`.
+`operator` is a station operator, and one of the operators in a submitted set must be `msg.sender`. Without it the digest says nothing about who broadcasts the beacon, and anyone watching the mempool could copy a signed attestation, take the credit, and leave the rightful sender reverting on `Replay`.
 
 `telemetryHash` is `keccak256(utf8(timestamp|snr|downlink|asn|az|el|handoverSlot))` over the **integer** feature vector, so the chain never sees floats.
 
 Type hashes are computed in TypeScript (`packages/core/src/crypto/eip712.ts`) with an in-repo Keccak-256 (Ethereum padding `0x01`, not NIST SHA3) and in Solidity with `keccak256(bytes(...))`. Compatibility is not asserted, it is tested: `vectors/eip712/attestations.json` carries the digests the TypeScript side produces, `contracts/test/Eip712Vectors.t.sol` recomputes each one with solc, and `packages/core/test/pipeline.test.ts` fails if the committed file drifts from what the pipeline produces.
 
+## Quorum
+
+A sighting may be attested by several stations at once. `runQuorum` resolves each member through the ordinary pipeline and then requires the members to agree on *what they saw*: same `noradId`, same `timestamp`, same `catalogHash`, distinct stations, distinct operators.
+
+`vectors/eip712/attestations.json` carries a worked three-station quorum — Sanya, Haikou and a vessel in the South China Sea, all seeing STARLINK-1008 at the same second:
+
+| Station | Elevation | Doppler | ASN |
+|---|---|---|---|
+| GENESIS-01 | 48.23° | +171 617 Hz | 14593 |
+| MERIDIAN-04 | 33.36° | +226 851 Hz | 14593 |
+| MV-ANYUAN | 25.88° | +116 911 Hz | 45700 |
+
+The numbers differ because the stations are hundreds of kilometres apart; they are all consistent with one orbit because there is one orbit. A set in which every station reported the same figures would not be independent observation of anything, and `pnpm verify` fails if the committed quorum ever becomes that.
+
+**What a quorum is worth, precisely.** The off-chain check is the conjunction of independent per-station checks against one shared orbit, so it is not a stronger *mathematical* statement than a single station makes. Its value is operational:
+
+- an attacker must compromise *k* independent keys instead of one;
+- a dishonest minority cannot push through data the honest members contradict.
+
+It does **not** stop a single party who holds every key and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Anyone reading "quorum" as "unforgeable" is reading too much into it.
+
 ## On-chain verifier (`SkyRelayBeacon.sol`)
 
-1. `att.operator == msg.sender`
-2. `asn ∈ {14593, 45700}`
-3. `elevationMilliDeg > 0`
-4. `timestamp ∈ (now − 120, now + 30]`
-5. `digest` unused (replay)
-6. `ecrecover(digest, sig) == attester`
-7. `totalBeacons++`, `totalEnergy += snrMilliDb`
-8. `msg.value` is forwarded to `orbitalVault` or the call reverts
+One entry point takes a set; a single-attester deployment is the degenerate case where the set has one member, so there is one code path to audit rather than two.
+
+```solidity
+function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata sigs)
+    external payable returns (uint256 beaconId);
+```
+
+1. not paused
+2. `atts.length == sigs.length`, non-empty, `≥ quorumThreshold`, `≤ MAX_QUORUM` (16)
+3. TTL on `atts[0].timestamp`: within `(now − 120, now + 30]`
+4. every member agrees on `noradId`, `timestamp`, `catalogHash`
+5. every member: `asn ∈ {14593, 45700}`, `elevationMilliDeg > 0`
+6. operators pairwise distinct
+7. each digest unused, then marked used
+8. each signature recovers to a **registered** attester, and signers are pairwise distinct
+9. `msg.sender` is one of the operators
+10. record: one beacon, one `StationReport` per member, `msg.value` forwarded to `orbitalVault`
 
 Signature malleability is not screened, and does not need to be: the replay key is the digest, not the signature, so a flipped `s` produces the same digest and reverts on `Replay`.
 
-No slash, no SNR mining, no self-reported ASN as calldata without the attester key.
+The contract never computes an orbit. SGP4, the boresight match and the ASN lookup are all off-chain; what it verifies is that *k* registered keys signed attestations describing the same sighting.
+
+## Governance
+
+One rule, applied consistently:
+
+> **Expansions of signing power are timelocked. Contractions take effect immediately.**
+
+| Action | Effect | Why |
+|---|---|---|
+| `scheduleAttester` → `activateAttester` | after `ROTATION_DELAY` (2 days) | a new key can sign; the addition is visible on chain before it bites |
+| `removeAttester` | immediate | an operator who has just learned a key is compromised must not wait two days to revoke it |
+| `setQuorumThreshold`, raising | immediate | strictly fewer signature sets become valid |
+| `setQuorumThreshold`, lowering → `activateQuorumThreshold` | after `ROTATION_DELAY` | strictly more become valid |
+| `pause` / `unpause` | immediate | emergency stop |
+| `transferOwnership` → `acceptOwnership` | two-step | a typo in the new owner address does not brick governance |
+
+`activateAttester` and `activateQuorumThreshold` are permissionless once the delay has run: the decision was the owner's, the clock is everybody's. `removeAttester` refuses to drop the set below `quorumThreshold`.
 
 ## Trust model
 
-Checks 2–4 above run on fields the attester signed. They bound a *buggy* attester, not a dishonest one: an attester that lies simply signs consistent lies. The protocol as implemented reduces to one immutable EOA.
+Every on-chain check runs on fields the attesters signed. They bound *buggy* attesters, not dishonest ones: an attester that lies simply signs consistent lies. What the protocol offers is a dial — `quorumThreshold` — that sets how many independent keys must lie at once.
 
-Making that assumption smaller is a protocol change, not a code change. The direction with teeth is a quorum: several independent stations attesting the same satellite at the same second, where the Doppler and elevation each station reports must be mutually consistent with one orbit. That is not implemented here.
+At `quorumThreshold = 1` the model reduces to a single EOA, and the honest description is the one in README's *Known limits*. Raising it is an operational decision, not a code change, and the contract will not let it exceed the number of registered attesters.
+
+Making the assumption genuinely small needs something this repository does not have: attesters whose independence is externally verifiable, and a reason to believe they are not all the same person.
 
 ## Privacy
 
 `stripPrivateFields` drops `location.{lat,lon,alt}` and replaces UT `id` with `utidHash = keccak256(id)[:8]`. Diagnostics from the official proto embed GPS; stripping is mandatory before a capture leaves the LAN.
 
-This protects the *capture*, not the operator. The attestation itself publishes `(noradId, elevationMilliDeg, dopplerHz, timestamp)`, and against a public TLE that tuple constrains the observer to a narrow locus; a handful of beacons from one station pin it. Treat the station location as public.
+This protects the *capture*, not the operator. The attestation itself publishes `(noradId, elevationMilliDeg, dopplerHz, timestamp)`, and against a public TLE that tuple constrains the observer to a narrow locus; a handful of beacons from one station pin it. A quorum makes this strictly worse: three stations reporting the same sighting triangulate each other. Treat every station location as public.
 
-## Attester key
+## Attester keys
 
-Foundry tests use `vm.sign`. Production attester is an operator EOA / Safe. The TypeScript pipeline **does not** need secp256k1 at runtime: it produces the digest; the chain does ecrecover.
+Foundry tests use `vm.sign`. Production attesters are operator EOAs or Safes. The TypeScript pipeline **does not** need secp256k1 at runtime: it produces the digest; the chain does ecrecover.

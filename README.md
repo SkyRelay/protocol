@@ -20,8 +20,11 @@ An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS
 - [What that one command prints](#what-that-one-command-prints)
 - [What is verified, and against what](#what-is-verified-and-against-what)
 - [The geometry gate](#the-geometry-gate)
+- [Committing to the catalog](#committing-to-the-catalog)
 - [The attestation](#the-attestation)
+- [Quorum](#quorum)
 - [The on-chain verifier](#the-on-chain-verifier)
+- [Governance](#governance)
 - [Running it against a real terminal](#running-it-against-a-real-terminal)
 - [Physics](#physics)
 - [Repository map](#repository-map)
@@ -49,7 +52,7 @@ What makes a capture expensive to fabricate is the other two inputs, and neither
 - **The CelesTrak GP catalog** says where every Starlink satellite actually was. Anyone can fetch the same file and recompute the same geometry.
 - **The public ASN registry** says which network an egress IP really sits on.
 
-So a forged frame has to be simultaneously consistent with a real orbit, a real ground station, and a real instant in time. That is the whole of the physical binding, and it is genuinely non-trivial — but it is not hardware attestation, and the trust boundary in the diagram is real: everything on chain is one signing key's word.
+So a forged frame has to be simultaneously consistent with a real orbit, a real ground station, and a real instant in time. That is the whole of the physical binding, and it is genuinely non-trivial — but it is not hardware attestation, and the trust boundary in the diagram is real: everything on chain is the word of however many keys `quorumThreshold` demands.
 
 ## Quickstart
 
@@ -68,7 +71,7 @@ Other entry points:
 
 ```bash
 pnpm typecheck        # tsc, zero errors
-pnpm test             # node:test unit suite, 28 tests
+pnpm test             # node:test unit suite, 45 tests
 pnpm run vectors      # regenerate vectors/frames + vectors/eip712/attestations.json
 cd contracts && forge test
 ```
@@ -84,18 +87,25 @@ SkyRelay feasibility pipeline
 =============================
 
   ok   SGP4 Vanguard-1 TEME residual r=6.82e-9 km  v=6.38e-10 km/s
-  eip712 typehash 0x3ef74e5ab3e68a910b640f4b2d211ddb61f06e52f18da48417abca1644024a79
+  eip712 typehash 0x7a58c180076695c85beb4e05dff21f8bb13e5e0a32990285cc35d08f7a45cf9c
   eip712 domain   0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
   ok   catalog STARLINK-1008(44714) STARLINK-1526(46029) STARLINK-2034(47352)
   ok   bad-asn-005.json rejected: ASN 15169 is outside {14593, 45700}
   ok   bad-geometry-006.json rejected: boresight 261.03/48.30 deg is 16.68 deg from
        the nearest catalog satellite (NORAD 44714); tolerance is 2 deg
-  ok   connected-001.json   NORAD 44714  el=48.23°  fd=171617 Hz   SNR=8.70 dB  residual 0.136°
-  ok   handover-002.json    NORAD 44714  el=54.33°  fd=145345 Hz   SNR=7.40 dB  residual 0.093°
-  ok   obstructed-003.json  NORAD 46029  el=19.34°  fd=-226572 Hz  SNR=3.10 dB  residual 0.374°
-  ok   roam-004.json        NORAD 47352  el=39.45°  fd=155900 Hz   SNR=9.20 dB  residual 0.348°
+  ok   connected-001.json       NORAD 44714  el=48.23°  fd=171617 Hz   SNR=8.70 dB  residual 0.136°
+  ok   handover-002.json        NORAD 44714  el=54.33°  fd=145345 Hz   SNR=7.40 dB  residual 0.093°
+  ok   obstructed-003.json      NORAD 46029  el=19.34°  fd=-226572 Hz  SNR=3.10 dB  residual 0.374°
+  ok   quorum-anyuan-009.json   NORAD 44714  el=25.88°  fd=116911 Hz   SNR=6.90 dB  residual 0.256°
+  ok   quorum-haikou-007.json   NORAD 44714  el=33.36°  fd=226851 Hz   SNR=8.10 dB  residual 0.195°
+  ok   roam-004.json            NORAD 47352  el=39.45°  fd=155900 Hz   SNR=9.20 dB  residual 0.348°
+  ok   quorum NORAD 44714 at t=1789918203: 3 stations agree, worst residual 0.256°
+       connected-001        GENESIS-01   el= 48.23°  fd=  171617 Hz  ASN 14593
+       quorum-haikou-007    MERIDIAN-04  el= 33.36°  fd=  226851 Hz  ASN 14593
+       quorum-anyuan-009    MV-ANYUAN    el= 25.88°  fd=  116911 Hz  ASN 45700
+  ok   quorum rejects a member from another second
 
-RESULT  positive=4  negative=2  forge=pass
+RESULT  positive=6  negative=2  quorum=3 stations  forge=pass
 ```
 
 Every number there is derived, not stored. The NORAD id is whichever satellite the boresight resolved to out of the whole catalog; the elevation and Doppler come out of SGP4 at the exact second the attestation commits to; the residual is how far the terminal's reported pointing sat from that satellite.
@@ -113,7 +123,9 @@ The point of this repository is that its claims are checkable against sources ou
 | Station placement | WGS-72 ellipsoid equation, five latitudes | < 10⁻¹² |
 | Range-rate | Numerical derivative of the reported range | < 10⁻³ km/s |
 | Keccak-256 | Known Ethereum digests, plus multi-block inputs cross-checked against Foundry's Rust implementation | exact |
-| EIP-712 digests | `solc` recomputes all four committed vectors from the same fields (`contracts/test/Eip712Vectors.t.sol`) | byte-identical |
+| EIP-712 digests | `solc` recomputes all six committed vectors from the same fields (`contracts/test/Eip712Vectors.t.sol`) | byte-identical |
+| Catalog commitment | One altered digit in one element set must move `catalogHash` | exact |
+| Quorum agreement | solc re-checks that the committed three-station set would satisfy `InconsistentQuorum` | pass |
 | Fixture reproducibility | CI regenerates `vectors/` and fails on any diff | no drift |
 
 The velocity row exists for a reason. An earlier revision carried a stray `xke` factor on `rdotl`/`rvdotl`: position was exact to the last digit and **every Doppler number was 13.4× too small**. A position-only check cannot see that, which is why velocity is pinned against an external source and cross-checked two more ways.
@@ -139,12 +151,21 @@ Where the 2° goes:
 
 The committed fixtures sit at 0.09°–0.38°, so there is roughly a 5× margin between a real capture and the tolerance, and a 44× margin between a real capture and the negative fixture.
 
+## Committing to the catalog
+
+The geometry gate says a real satellite was where the terminal claimed to be pointing. That claim has a hole unless the chain also knows **which element set** the claim was computed from: an attestation resolved against a doctored TLE is otherwise indistinguishable from one resolved against the real catalog, and "consistent with a real orbit" reduces to "the operator says they used the real orbit".
+
+So the attestation commits to it. `catalogHash` is `keccak256` over the element sets used — entries sorted by NORAD id, each as its two 69-column lines, joined by newlines. Sorting makes the hash independent of the order files were read in; `packages/core/test/catalog.test.ts` pins that, and pins that a single altered digit of mean motion moves the hash.
+
+A verifier can now re-fetch the archived CelesTrak elements for that epoch, recompute the hash, and recompute the geometry themselves. What this does *not* do is prove the committed catalog is the true one — it makes the choice auditable after the fact, not enforced at signing time.
+
 ## The attestation
 
 ```solidity
 SkyRelayAttestation(
-  address operator,           // the only address allowed to submit this beacon
+  address operator,           // a station operator; one of them must submit
   bytes32 telemetryHash,      // keccak256 over the integer feature vector
+  bytes32 catalogHash,        // the element sets the geometry was resolved against
   uint32  noradId,            // which satellite the boresight resolved to
   int32   elevationMilliDeg,  // from SGP4, not from the terminal
   int32   dopplerHz,          // from SGP4 range-rate at Ku centre
@@ -159,14 +180,35 @@ Domain: `name = "SkyRelay"`, `version = "1"`, `chainId`, `verifyingContract`.
 Two details that are load-bearing:
 
 - **Everything is an integer.** `telemetryHash` is `keccak256` over `timestamp|snr|downlink|asn|az|el|handoverSlot` joined as decimal integers, so no float ever reaches the chain and no float ever enters a hash preimage.
-- **`operator` is committed.** Without it the digest says nothing about who broadcasts the beacon, so anyone watching the mempool could copy a signed attestation, take the credit, and leave the rightful sender reverting on `Replay`. `test_frontRunnerCannotStealABeacon` covers exactly that.
+- **`operator` is committed.** Without it the digest says nothing about who broadcasts the beacon, so anyone watching the mempool could copy a signed attestation, take the credit, and leave the rightful sender reverting on `Replay`. `test_frontRunnerCannotStealOrGrief` covers exactly that.
+
+## Quorum
+
+A sighting can be attested by several stations at once. `runQuorum` resolves each member through the ordinary pipeline, then requires the members to agree on *what they saw* — same satellite, same second, same catalog — with distinct stations and distinct operators.
+
+The committed fixture is three stations seeing STARLINK-1008 at the same second:
+
+| Station | | Elevation | Doppler | ASN |
+|---|---|---|---|---|
+| GENESIS-01 | Sanya | 48.23° | +171 617 Hz | 14593 |
+| MERIDIAN-04 | Haikou, 210 km away | 33.36° | +226 851 Hz | 14593 |
+| MV-ANYUAN | at sea, 460 km away | 25.88° | +116 911 Hz | 45700 |
+
+The three disagree on every number, and that is the point: they are hundreds of kilometres apart, so one orbit puts the satellite at three different elevations and closing speeds. `pnpm verify` fails if the committed quorum ever degenerates into three identical reports, because that would not be independent observation of anything.
+
+**What a quorum is worth, precisely.** The off-chain check is the conjunction of independent per-station checks against one shared orbit, so it is not a stronger *mathematical* statement than one station makes. Its value is operational:
+
+- an attacker must compromise *k* independent keys instead of one;
+- a dishonest minority cannot push through data the honest members contradict.
+
+It does **not** stop a single party who holds every key and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Reading "quorum" as "unforgeable" is reading too much into it.
 
 ## The on-chain verifier
 
-`contracts/src/SkyRelayBeacon.sol`, 157 lines, no OpenZeppelin, no proxy.
+`contracts/src/SkyRelayBeacon.sol`, 399 lines, no OpenZeppelin, no proxy.
 
 ```solidity
-function verifyAndRecord(SkyRelayAttestation calldata att, bytes calldata signature)
+function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata sigs)
     external payable returns (uint256 beaconId);
 
 function hashAttestation(SkyRelayAttestation calldata att, uint256 chainId, address verifyingContract)
@@ -175,19 +217,42 @@ function hashAttestation(SkyRelayAttestation calldata att, uint256 chainId, addr
 function domainSeparator() public view returns (bytes32);
 ```
 
-`verifyAndRecord` applies, in order: `operator == msg.sender` → ASN allow-set → `elevationMilliDeg > 0` → `timestamp` inside `(now − 120, now + 30]` → digest unused → `ecrecover == attester`. It then increments `totalBeacons`, credits `userBeaconCount[msg.sender]`, adds to `totalEnergy`, and forwards any `msg.value` to the immutable `orbitalVault` or reverts.
+One entry point takes a set. A single-attester deployment is the degenerate case where the set has one member, so there is one code path to audit rather than two.
 
-Custom errors name the exact gate: `WrongOperator`, `BadAsn`, `BelowHorizon`, `Future`, `Expired`, `Replay`, `BadSigner`, `BadSignature`, `VaultTransfer`, `ZeroAddress`.
+`verifyAndRecord` applies, in order: not paused → lengths match, non-empty, at least `quorumThreshold`, at most 16 → TTL on the shared timestamp → then per member: agreement on `noradId`/`timestamp`/`catalogHash`, ASN allow-set, `elevationMilliDeg > 0`, operators pairwise distinct, digest unused, signature recovers to a **registered** attester, signers pairwise distinct → finally `msg.sender` must be one of the operators. It records one beacon, one `StationReport` per member, credits every operator, and forwards any `msg.value` to the immutable `orbitalVault` or reverts.
+
+Custom errors name the exact gate: `IsPaused`, `LengthMismatch`, `QuorumNotMet`, `TooManyAttestations`, `InconsistentQuorum`, `BadAsn`, `BelowHorizon`, `Future`, `Expired`, `Replay`, `BadSigner`, `DuplicateSigner`, `DuplicateOperator`, `WrongOperator`, `BadSignature`, `VaultTransfer`, plus the governance set.
+
+The contract never computes an orbit. SGP4, the boresight match and the ASN lookup are all off-chain; what it verifies is that *k* registered keys signed attestations describing the same sighting.
 
 Signature malleability is deliberately not screened. The replay key is the digest, not the signature, so a flipped `s` produces the same digest and reverts on `Replay` anyway.
 
 Deploy:
 
 ```bash
-cd contracts && ATTESTER=0x... ORBITAL_VAULT=0x... forge script script/Deploy.s.sol --rpc-url chapel --broadcast
+cd contracts && OWNER=0x... ATTESTER=0x... ORBITAL_VAULT=0x... forge script script/Deploy.s.sol --rpc-url chapel --broadcast
 ```
 
 `foundry.toml` already carries `bsc` and `chapel` RPC aliases.
+
+## Governance
+
+The attester set is mutable, under one rule applied consistently:
+
+> **Expansions of signing power are timelocked. Contractions take effect immediately.**
+
+| Action | Effect | Why |
+|---|---|---|
+| `scheduleAttester` → `activateAttester` | after `ROTATION_DELAY` (2 days) | a new key can sign, so the addition is visible on chain before it bites |
+| `removeAttester` | immediate | an operator who has just learned a key is compromised must not wait two days to revoke it |
+| `setQuorumThreshold`, raising | immediate | strictly fewer signature sets become valid |
+| `setQuorumThreshold`, lowering → `activateQuorumThreshold` | after `ROTATION_DELAY` | strictly more become valid |
+| `pause` / `unpause` | immediate | emergency stop |
+| `transferOwnership` → `acceptOwnership` | two-step | a typo in the new owner address does not brick governance |
+
+`activateAttester` and `activateQuorumThreshold` are permissionless once the delay has run: the decision was the owner's, the clock is everybody's. `removeAttester` refuses to drop the set below `quorumThreshold`.
+
+`contracts/test/Governance.t.sol` holds each of these, including that a stranger can call none of them.
 
 ## Running it against a real terminal
 
@@ -217,8 +282,13 @@ const out = runPipeline({
 
 out.attestation;              // the struct to sign
 out.digest;                   // what the attester signs, and what ecrecover sees
+out.catalogHash;              // recomputable by anyone holding the same TLEs
 out.sighting.boresightResidualDeg;
 ```
+
+For several stations reporting the same sighting, `runQuorum` takes the same
+arguments per member and additionally enforces that the members agree on the
+satellite, the second and the catalog.
 
 The station is an explicit argument, never taken from the capture: `stripPrivateFields` removes the GPS block before anything downstream sees it.
 
@@ -242,31 +312,32 @@ Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 5
 
 ## Repository map
 
-About 2 100 lines of source, no runtime dependencies.
+About 2 550 lines of source, no runtime dependencies.
 
 | Path | Lines | What it does |
 |---|---|---|
+| `contracts/src/SkyRelayBeacon.sol` | 399 | Quorum verifier, attester registry, timelocked governance |
 | `packages/core/src/orbit/sgp4.ts` | 327 | Near-earth SGP4 initialiser and propagator, TEME output |
 | `packages/core/src/orbit/coords.ts` | 157 | Julian date, GMST, TEME→ECEF (position and velocity), ellipsoidal station, look angles |
+| `packages/core/src/orbit/tle.ts` | 150 | 69-column TLE parsing with checksum validation, catalog commitment |
 | `packages/core/src/orbit/pass.ts` | 138 | `observe`, angular separation, `matchBoresight` |
-| `packages/core/src/orbit/tle.ts` | 125 | 69-column TLE parsing with checksum validation |
-| `packages/core/src/orbit/constants.ts` | 56 | WGS-72, flattening, Earth rotation, Ku centre, ASN allow-set, handover slots |
-| `packages/core/src/orbit/doppler.ts` | 17 | Classical one-way shift |
 | `packages/core/src/crypto/keccak.ts` | 127 | Keccak-f[1600] with Ethereum `0x01` padding |
-| `packages/core/src/crypto/abi.ts` | 83 | Static-type ABI words, including int32 sign extension |
-| `packages/core/src/crypto/eip712.ts` | 68 | Type hashes, domain separator, typed-data digest |
 | `packages/core/src/telemetry/parse.ts` | 123 | Local Device API JSON, camelCase and snake_case |
+| `packages/core/src/quorum.ts` | 104 | Multi-station agreement on one sighting |
 | `packages/core/src/telemetry/features.ts` | 86 | Integer feature vector, handover slot, telemetry hash |
+| `packages/core/src/pipeline.ts` | 85 | The four steps, end to end |
+| `packages/core/src/crypto/abi.ts` | 83 | Static-type ABI words, including int32 sign extension |
+| `packages/core/src/crypto/eip712.ts` | 71 | Type hashes, domain separator, typed-data digest |
+| `packages/core/src/orbit/constants.ts` | 56 | WGS-72, flattening, Earth rotation, Ku centre, ASN allow-set, handover slots |
 | `packages/core/src/telemetry/privacy.ts` | 34 | GPS removal, terminal id hashing |
 | `packages/core/src/telemetry/asn.ts` | 27 | AS14593 / AS45700 allow-set |
-| `packages/core/src/pipeline.ts` | 75 | The four steps, end to end |
-| `contracts/src/SkyRelayBeacon.sol` | 157 | The verifier |
-| `scripts/build-vectors.ts` | 266 | Regenerates fixtures and digest vectors from real passes |
-| `scripts/verify-pipeline.ts` | 132 | `pnpm verify` |
+| `packages/core/src/orbit/doppler.ts` | 17 | Classical one-way shift |
+| `scripts/build-vectors.ts` | 364 | Regenerates fixtures and digest vectors from real passes |
+| `scripts/verify-pipeline.ts` | 182 | `pnpm verify` |
 
 ## Tests
 
-**28 TypeScript** (`node:test`) and **20 Solidity** (Foundry, including two fuzz suites).
+**45 TypeScript** (`node:test`) and **41 Solidity** (Foundry, across three suites, including fuzz).
 
 The ones that carry weight:
 
@@ -277,23 +348,29 @@ The ones that carry weight:
 | `range-rate is the time derivative of range` | a missing ω × r transport term |
 | `a station at zero altitude lies on the WGS-72 ellipsoid` | the spherical-Earth shortcut |
 | `a point on the local vertical is at 90 degrees elevation` | the zenith `asin` domain error — this one only failed on CI |
+| `one altered digit in one element set changes the hash` | a catalog commitment that does not actually commit |
 | `pipeline rejects a boresight no catalog satellite explains` | the geometry gate silently degrading |
+| `stations at different places report different geometry` | a "quorum" that is really one measurement copied k times |
 | `committed digest vectors match what the pipeline produces today` | stale cross-implementation vectors |
 | `test_solidityReproducesEveryTypescriptDigest` | TypeScript and solc disagreeing on the encoding |
 | `test_everyFieldIsCommitted` | an encoder that silently drops a struct member |
-| `test_frontRunnerCannotStealABeacon` | mempool theft of a signed attestation |
+| `test_oneAttesterCannotFillTheQuorumAlone` | one key signing k times to fake a quorum |
+| `test_frontRunnerCannotStealOrGrief` | mempool theft of a signed attestation |
+| `test_addingAnAttesterWaitsOutTheDelay` / `test_removingAnAttesterIsImmediate` | the timelock asymmetry being implemented backwards |
 
 ## What this proves / does not prove
 
-**Proves:** deterministic encoding from a Dishy-shaped JSON plus public TLEs into a digest `ecrecover` accepts, with ASN, TTL, replay, operator, and horizon checks — and that two independent implementations of Keccak-256 and EIP-712 (TypeScript here, solc in `contracts/`) agree byte for byte on every committed vector.
+**Proves:** deterministic encoding from a Dishy-shaped JSON plus public TLEs into a digest `ecrecover` accepts, with ASN, TTL, replay, operator, quorum and horizon checks — and that two independent implementations of Keccak-256 and EIP-712 (TypeScript here, solc in `contracts/`) agree byte for byte on every committed vector.
 
-**The one geometric binding:** a capture is only attested if some satellite in the public catalog was actually where the terminal says it was pointing, at the second the attestation commits to.
+**The one geometric binding:** a capture is only attested if some satellite in the public catalog was actually where the terminal says it was pointing, at the second the attestation commits to — and the attestation names, by hash, the element set that claim was computed from.
 
 **Does not prove:** that a given JSON was signed by SpaceX silicon; that the operator was physically at the station it declares; that BSC validators live in orbit; affiliation with SpaceX/Starlink.
 
 ## Known limits
 
-- **One attester.** `attester` is a single immutable EOA. Every on-chain check runs on data that key signed, so the checks defend against a *buggy* attester, never a lying one. Key compromise means redeploying.
+- **The attester set is only as independent as its operator.** `quorumThreshold` sets how many distinct registered keys must sign one sighting, and the contract enforces distinctness — but nothing here makes those keys belong to different people. A deployment where one party holds all of them is indistinguishable on chain from k genuinely independent stations, and that party can fabricate k mutually consistent reports by running SGP4. The quorum raises the cost of compromise; it does not create independence.
+- **`quorumThreshold` ships at 1.** A fresh deployment registers one attester, so out of the box the trust model *is* a single EOA. Raising it is an operational act, not a code change.
+- **The owner is trusted.** It can pause the contract, and it can add attesters (after the 2-day delay) or remove them (immediately). It cannot forge a beacon, but it can decide who may.
 - **The attestation is a location fingerprint.** Stripping GPS from the capture does not hide much: `(noradId, elevation, doppler, timestamp)` against a public TLE constrains the observer to a narrow region, and a few beacons pin it. Treat the station location as public.
 - **`dishGetStatus.snr` is deprecated.** Recent terminal firmware stopped populating it, so `extractFeatures` will reject captures from a current dish until the feature set moves to a field that is still served. The fixtures use the documented field.
 - **`usedDigest` grows without bound** — one permanent storage slot per beacon, load-bearing only for the 120 s TTL.
@@ -304,12 +381,14 @@ The ones that carry weight:
 
 Listed in the order that would actually move the trust model, not the order that is easiest:
 
-1. **A quorum of independent stations.** Several receivers attesting the same satellite at the same second, where the elevation and Doppler each one reports must be mutually consistent with a single orbit. That is a measurement a single liar cannot produce, and it is the one change that removes the single-key assumption.
-2. **On-chain commitment to the element set.** Publish the catalog hash the attestation was resolved against, so a verifier can check the geometry was not computed from a doctored TLE.
-3. **Per-frequency Doppler tracking.** A time series of Doppler across a pass has a shape fixed by orbital mechanics; matching that shape is far harder to fake than matching one instant.
+1. **Externally verifiable independence between attesters.** The mechanism for a quorum now exists; what does not exist is any reason for an observer to believe the k keys are k people. Stake, identity attestations or geographic proofs would each be a different answer, and none is implemented.
+2. **Per-pass Doppler tracking.** A time series of Doppler across a whole pass has a shape fixed by orbital mechanics. Matching that shape is far harder to fake than matching one instant, and unlike the quorum it is a *measurement* property rather than a key-management one.
+3. **Bounded replay storage.** `usedDigest` is permanent but only load-bearing for 120 s; a time-bucketed structure would let old entries be pruned.
 4. **Feature migration off `snr`.** Whatever current firmware still populates.
 
-None of these are implemented here, and the repository does not claim otherwise.
+Items 1 and 2 are the ones that would change the honest description of this project. They are not implemented, and the repository does not claim otherwise.
+
+Already landed since the first release: the catalog commitment (was item 2) and the quorum mechanism (was item 1, in the mechanical half only — see the caveat above).
 
 ## FAQ
 
@@ -317,7 +396,9 @@ None of these are implemented here, and the repository does not claim otherwise.
 
 **Is this affiliated with SpaceX or Starlink?** No, in any sense. It consumes a JSON file a terminal you own serves on your own LAN, plus public catalogs.
 
-**Could I fake a beacon?** If you hold the attester key, trivially — see [Known limits](#known-limits). Without it, you would need to find a station, an instant and a real element set that agree to within 2°, which is work but not impossible. The geometry gate raises the cost; it does not make forgery impossible.
+**Could I fake a beacon?** If you hold `quorumThreshold` attester keys, yes — run SGP4 yourself and sign k consistent reports. Without them you would need to find a station, an instant and a real element set that agree to within 2°, which is work but not impossible. Every gate here raises the cost of forgery; none makes it impossible.
+
+**Does the quorum make it trustless?** No. It makes an attacker compromise k keys instead of one, and stops a dishonest minority. It says nothing about whether those k keys belong to k people — see [Known limits](#known-limits).
 
 **Why implement SGP4 and Keccak from scratch instead of using a library?** For Keccak, so the digest the pipeline produces can be *compared* against solc rather than trusted — two implementations sharing a dependency prove nothing. For SGP4, so the WGS-72 constants, the frame conversions and the error budget are all visible and testable in one place. Both are pinned against external references.
 
