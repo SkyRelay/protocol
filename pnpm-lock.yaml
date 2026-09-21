@@ -11,6 +11,9 @@ importers:
       '@types/node':
         specifier: ^24.5.2
         version: 24.13.6
+      satellite.js:
+        specifier: ^7.1.0
+        version: 7.1.0
       tsx:
         specifier: ^4.20.5
         version: 4.23.15
@@ -191,6 +194,9 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  satellite.js@7.1.0:
+    resolution: {integrity: sha512-U6nRml9Nb7dV9LJPiMNPyna7U7ry+1nXYkOeCEG7K/YbojQQLHHmcjPisp03VNY+HLcbQHqbt7t4t1vQMaKCLQ==}
+
   tsx@4.23.15:
     resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
@@ -319,6 +325,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  satellite.js@7.1.0: {}
 
   tsx@4.23.15:
     dependencies:

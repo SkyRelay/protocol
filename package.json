@@ -2,7 +2,7 @@
   "name": "skyrelay",
   "version": "0.1.0",
   "private": true,
-  "description": "SkyRelay: Starlink UT telemetry \u2192 physical features \u2192 EIP-712 \u2192 BSC beacon proof",
+  "description": "SkyRelay: Starlink UT telemetry → physical features → EIP-712 → BSC beacon proof",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
+    "satellite.js": "^7.1.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   },

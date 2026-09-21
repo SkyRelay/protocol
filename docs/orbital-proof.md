@@ -27,6 +27,10 @@ Velocity is pinned deliberately. An earlier revision of this file carried an `xk
 
 SGP4's analytic velocity is not the exact derivative of its own position expression — the short-period periodics are differentiated only in part — so the numerical check uses a relative bound of \(10^{-3}\), against an inherent residual of \(2\times10^{-4}\) (eccentric) and \(2\times10^{-6}\) (near-circular).
 
+The propagator is also checked against satellite.js on every element set in `vectors/tle/` at \(t = 0, 12.5, 45, 200, 720\) min. Worst residual: \(1.8\times10^{-10}\) km in position, \(1.6\times10^{-13}\) km/s in velocity (`packages/core/test/crossval.test.ts`).
+
+Be precise about what that buys. satellite.js is a port of the same Vallado/CelesTrak reference code, so agreement at the \(10^{-10}\) km level reflects shared lineage rather than independent confirmation of the algorithm — the published table above is what covers the algorithm itself. What the cross-check does establish is that our transcription is faithful: a dropped term, a mistyped constant or a sign error anywhere in those 300 lines would surface immediately, including on the near-circular Starlink sets the published table never touches.
+
 ## 2. TEME → ECEF
 
 Greenwich mean sidereal time \(\theta\) (Vallado `gstime`) rotates TEME about \(Z\):

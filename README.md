@@ -123,6 +123,7 @@ The point of this repository is that its claims are checkable against sources ou
 | SGP4 position | Published verification output for satellite 00005 (Vallado et al., AIAA 2006-6753), t = 0 and 360 min | 6.8 × 10⁻⁹ km |
 | SGP4 velocity | Same published output | 6.4 × 10⁻¹⁰ km/s |
 | SGP4 internal consistency | Analytic velocity vs. numerical derivative of position; speed vs. vis-viva | within the model's own 2 × 10⁻⁴ relative residual |
+| SGP4 transcription | satellite.js — a separate implementation of the same published algorithm — on the four shipped element sets, t = 0, 12.5, 45, 200, 720 min | 1.8 × 10⁻¹⁰ km, 1.6 × 10⁻¹³ km/s |
 | GMST | Known value at J2000.0, 280.46062° | 2 × 10⁻⁶ deg |
 | Station placement | WGS-72 ellipsoid equation, five latitudes | < 10⁻¹² |
 | Range-rate | Numerical derivative of the reported range | < 10⁻³ km/s |
