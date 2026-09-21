@@ -11,6 +11,28 @@ An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS
 [![BSC](https://img.shields.io/badge/BSC-Mainnet%20%2F%20Chapel-f0b90b.svg)](https://www.bnbchain.org)
 [![Starlink UT](https://img.shields.io/badge/Starlink-UT%20gRPC%20%3A9200-7c3aed.svg)](https://github.com/SpaceExplorationTechnologies/enterprise-api)
 
+---
+
+## Contents
+
+- [How Starlink and BNB Smart Chain relate](#how-starlink-and-bnb-smart-chain-relate)
+- [Quickstart](#quickstart)
+- [What that one command prints](#what-that-one-command-prints)
+- [What is verified, and against what](#what-is-verified-and-against-what)
+- [The geometry gate](#the-geometry-gate)
+- [The attestation](#the-attestation)
+- [The on-chain verifier](#the-on-chain-verifier)
+- [Running it against a real terminal](#running-it-against-a-real-terminal)
+- [Physics](#physics)
+- [Repository map](#repository-map)
+- [Tests](#tests)
+- [What this proves / does not prove](#what-this-proves--does-not-prove)
+- [Known limits](#known-limits)
+- [What would make this stronger](#what-would-make-this-stronger)
+- [FAQ](#faq)
+
+---
+
 ## How Starlink and BNB Smart Chain relate
 
 <picture>
@@ -46,10 +68,12 @@ Other entry points:
 
 ```bash
 pnpm typecheck        # tsc, zero errors
-pnpm test             # node:test unit suite
+pnpm test             # node:test unit suite, 28 tests
 pnpm run vectors      # regenerate vectors/frames + vectors/eip712/attestations.json
 cd contracts && forge test
 ```
+
+`pnpm verify` is the one that matters: it runs the SGP4 lock, pushes every fixture through the pipeline and checks each negative fixture is rejected **by the gate it is supposed to trip**, then runs the unit suite, then `forge test`.
 
 ## What that one command prints
 
@@ -74,7 +98,25 @@ SkyRelay feasibility pipeline
 RESULT  positive=4  negative=2  forge=pass
 ```
 
-Every number there is derived, not stored: the NORAD id is the satellite the boresight resolved to, the elevation and Doppler come out of SGP4 at the second the attestation commits to, and the residual is how far the terminal's reported pointing sat from that satellite.
+Every number there is derived, not stored. The NORAD id is whichever satellite the boresight resolved to out of the whole catalog; the elevation and Doppler come out of SGP4 at the exact second the attestation commits to; the residual is how far the terminal's reported pointing sat from that satellite.
+
+## What is verified, and against what
+
+The point of this repository is that its claims are checkable against sources outside it. Nothing below is self-attested.
+
+| Claim | Checked against | Residual / result |
+|---|---|---|
+| SGP4 position | Published verification output for satellite 00005 (Vallado et al., AIAA 2006-6753), t = 0 and 360 min | 6.8 × 10⁻⁹ km |
+| SGP4 velocity | Same published output | 6.4 × 10⁻¹⁰ km/s |
+| SGP4 internal consistency | Analytic velocity vs. numerical derivative of position; speed vs. vis-viva | within the model's own 2 × 10⁻⁴ relative residual |
+| GMST | Known value at J2000.0, 280.46062° | 2 × 10⁻⁶ deg |
+| Station placement | WGS-72 ellipsoid equation, five latitudes | < 10⁻¹² |
+| Range-rate | Numerical derivative of the reported range | < 10⁻³ km/s |
+| Keccak-256 | Known Ethereum digests, plus multi-block inputs cross-checked against Foundry's Rust implementation | exact |
+| EIP-712 digests | `solc` recomputes all four committed vectors from the same fields (`contracts/test/Eip712Vectors.t.sol`) | byte-identical |
+| Fixture reproducibility | CI regenerates `vectors/` and fails on any diff | no drift |
+
+The velocity row exists for a reason. An earlier revision carried a stray `xke` factor on `rdotl`/`rvdotl`: position was exact to the last digit and **every Doppler number was 13.4× too small**. A position-only check cannot see that, which is why velocity is pinned against an external source and cross-checked two more ways.
 
 ## The geometry gate
 
@@ -83,41 +125,163 @@ Every number there is derived, not stored: the NORAD id is the satellite the bor
   <img alt="A station on the WGS-72 ellipsoid, the elevation angle to STARLINK-1008, the boresight tolerance cone, and the resulting Ku-band Doppler shift." src="docs/img/geometry-light.svg">
 </picture>
 
-`matchBoresight` asks one question: is there a satellite in the public catalog within 2° of where this terminal says it is pointing, at this exact second? `bad-geometry-006.json` is the same capture with the boresight swung 25°, and it is rejected at 16.68°.
+`matchBoresight` asks one question: is there a satellite in the public catalog within 2° of where this terminal says it is pointing, at this exact second? It propagates every element set in the catalog, keeps only those above the horizon, takes the smallest angular separation from the reported boresight, and throws when even the best is outside tolerance.
 
-The 2° budget is mostly the whole-second timestamp: a satellite near zenith sweeps about 0.9°/s, so committing an integer second costs up to ~1° of pointing on its own. Terminal quantisation and SGP4 along-track drift make up the rest.
+`bad-geometry-006.json` is `connected-001` with the boresight swung 25°. It is rejected at 16.68°.
 
-## Physics (short)
+Where the 2° goes:
 
-SGP4, WGS-72, near-Earth only (\(P<225\) min). Station coordinates are placed on the **WGS-72 ellipsoid**, not a sphere, because the local vertical tilts by up to \(f\sin 2\varphi \approx 0.19^\circ\) — a hundred times the milli-degree resolution the attestation stores.
+| Source | Magnitude |
+|---|---|
+| Attestation timestamps are whole seconds, so geometry is evaluated up to 1 s from the capture instant. A 550 km satellite near zenith sweeps ~0.9°/s. | ≤ ~1° |
+| Terminal reporting quantisation and tracking error | ~0.1° |
+| SGP4 along-track error at a half-day-old element set | ~0.1° |
+
+The committed fixtures sit at 0.09°–0.38°, so there is roughly a 5× margin between a real capture and the tolerance, and a 44× margin between a real capture and the negative fixture.
+
+## The attestation
+
+```solidity
+SkyRelayAttestation(
+  address operator,           // the only address allowed to submit this beacon
+  bytes32 telemetryHash,      // keccak256 over the integer feature vector
+  uint32  noradId,            // which satellite the boresight resolved to
+  int32   elevationMilliDeg,  // from SGP4, not from the terminal
+  int32   dopplerHz,          // from SGP4 range-rate at Ku centre
+  uint32  snrMilliDb,         // terminal-reported, in millidB
+  uint32  asn,                // egress autonomous system
+  uint64  timestamp           // whole seconds UTC
+)
+```
+
+Domain: `name = "SkyRelay"`, `version = "1"`, `chainId`, `verifyingContract`.
+
+Two details that are load-bearing:
+
+- **Everything is an integer.** `telemetryHash` is `keccak256` over `timestamp|snr|downlink|asn|az|el|handoverSlot` joined as decimal integers, so no float ever reaches the chain and no float ever enters a hash preimage.
+- **`operator` is committed.** Without it the digest says nothing about who broadcasts the beacon, so anyone watching the mempool could copy a signed attestation, take the credit, and leave the rightful sender reverting on `Replay`. `test_frontRunnerCannotStealABeacon` covers exactly that.
+
+## The on-chain verifier
+
+`contracts/src/SkyRelayBeacon.sol`, 157 lines, no OpenZeppelin, no proxy.
+
+```solidity
+function verifyAndRecord(SkyRelayAttestation calldata att, bytes calldata signature)
+    external payable returns (uint256 beaconId);
+
+function hashAttestation(SkyRelayAttestation calldata att, uint256 chainId, address verifyingContract)
+    public view returns (bytes32);
+
+function domainSeparator() public view returns (bytes32);
+```
+
+`verifyAndRecord` applies, in order: `operator == msg.sender` → ASN allow-set → `elevationMilliDeg > 0` → `timestamp` inside `(now − 120, now + 30]` → digest unused → `ecrecover == attester`. It then increments `totalBeacons`, credits `userBeaconCount[msg.sender]`, adds to `totalEnergy`, and forwards any `msg.value` to the immutable `orbitalVault` or reverts.
+
+Custom errors name the exact gate: `WrongOperator`, `BadAsn`, `BelowHorizon`, `Future`, `Expired`, `Replay`, `BadSigner`, `BadSignature`, `VaultTransfer`, `ZeroAddress`.
+
+Signature malleability is deliberately not screened. The replay key is the digest, not the signature, so a flipped `s` produces the same digest and reverts on `Replay` anyway.
+
+Deploy:
+
+```bash
+cd contracts && ATTESTER=0x... ORBITAL_VAULT=0x... forge script script/Deploy.s.sol --rpc-url chapel --broadcast
+```
+
+`foundry.toml` already carries `bsc` and `chapel` RPC aliases.
+
+## Running it against a real terminal
+
+Nothing here needs hardware, but if you have a dish the path is short. Read [Known limits](#known-limits) first — on current firmware step 1 will likely come back without an SNR field.
+
+```bash
+# 1. capture (the terminal answers on your LAN, unauthenticated)
+grpcurl -plaintext -d '{"get_status":{}}' 192.168.100.1:9200 SpaceX.API.Device.Device/Handle
+
+# 2. fetch the catalog you will be matched against
+curl -s 'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle' \
+  -o vectors/tle/starlink-live.txt
+```
+
+Then wrap the capture in the envelope the fixtures use (`capturedAt`, `station`, `egress`) and run the pipeline:
+
+```ts
+import { runPipeline, parse3le } from "@skyrelay/core";
+
+const out = runPipeline({
+  capture,                    // the gRPC JSON, envelope included
+  catalog,                    // parse3le over the CelesTrak file
+  station,                    // your own coordinates — never read from the capture
+  domain: { chainId: 56, verifyingContract: "0x..." },
+  operator: "0x...",          // the address that will submit
+});
+
+out.attestation;              // the struct to sign
+out.digest;                   // what the attester signs, and what ecrecover sees
+out.sighting.boresightResidualDeg;
+```
+
+The station is an explicit argument, never taken from the capture: `stripPrivateFields` removes the GPS block before anything downstream sees it.
+
+## Physics
+
+SGP4, WGS-72, near-Earth only (*P* < 225 min). A TLE is not an osculating Keplerian state — it is fitted to SGP4, so propagating it with a two-body integrator is a category error, and the Starlink shells at *P* ≈ 91–96 min never enter deep space.
+
+Station coordinates sit on the **WGS-72 ellipsoid**, not a sphere. The spherical shortcut misplaces a station by ~2.1 km radially at φ = 18.2° and, more importantly, tilts the local vertical by up to *f* sin 2φ ≈ 0.19° — a hundred times the milli-degree resolution the attestation stores.
 
 Look angles come from TEME→ECEF via GMST. The velocity transform subtracts the transport term,
 
-\[
-\mathbf{v}_\mathrm{ECEF} = R(\theta)\,\mathbf{v}_\mathrm{TEME} - \boldsymbol\omega \times \mathbf{r}_\mathrm{ECEF},
-\]
+**v**_ECEF = *R*(θ) **v**_TEME − **ω** × **r**_ECEF,  ω = 7.292115 × 10⁻⁵ rad/s
 
-without which every range-rate — and therefore every Doppler shift — is wrong. Doppler at Ku centre \(f_c=11.7\,\mathrm{GHz}\):
+without which every range-rate — and therefore every Doppler shift — is biased by up to 0.5 km/s, about 19 kHz at Ku. Doppler at the Ku downlink centre *f*_c = 11.7 GHz:
 
-\[
-f_d = -\frac{\dot\rho}{c}\,f_c
-\]
+*f*_d = −(ρ̇ / *c*) · *f*_c
 
-which puts a real overhead pass at \(|f_d| \lesssim 270\,\mathrm{kHz}\); the fixtures land between 145 and 227 kHz. Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 57**. Full derivation: [`docs/orbital-proof.md`](docs/orbital-proof.md). Protocol: [`docs/protocol.md`](docs/protocol.md).
+which puts a real overhead pass at |*f*_d| ≲ 270 kHz and crosses zero at closest approach; the fixtures are deliberately placed off the peak of their passes and land between 145 and 227 kHz.
 
-## Layout
+Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 57**, so the feature vector records the next slot as a timing fingerprint. Full derivation: [`docs/orbital-proof.md`](docs/orbital-proof.md). Protocol: [`docs/protocol.md`](docs/protocol.md).
 
-```
-packages/core/src/orbit/       SGP4, TLE, look angles, Doppler, boresight match
-packages/core/src/telemetry/   gRPC JSON, privacy strip, ASN filter
-packages/core/src/crypto/      Keccak-256 + ABI + EIP-712
-contracts/src/SkyRelayBeacon.sol
-scripts/build-vectors.ts       regenerates the fixtures and the digest vectors
-vectors/                       dish frames + TLEs (no hardware)
-scripts/verify-pipeline.ts     pnpm verify
-```
+## Repository map
 
-Zero runtime npm dependencies in `@skyrelay/core`. `tsx` / `typescript` are install-time only.
+About 2 100 lines of source, no runtime dependencies.
+
+| Path | Lines | What it does |
+|---|---|---|
+| `packages/core/src/orbit/sgp4.ts` | 327 | Near-earth SGP4 initialiser and propagator, TEME output |
+| `packages/core/src/orbit/coords.ts` | 157 | Julian date, GMST, TEME→ECEF (position and velocity), ellipsoidal station, look angles |
+| `packages/core/src/orbit/pass.ts` | 138 | `observe`, angular separation, `matchBoresight` |
+| `packages/core/src/orbit/tle.ts` | 125 | 69-column TLE parsing with checksum validation |
+| `packages/core/src/orbit/constants.ts` | 56 | WGS-72, flattening, Earth rotation, Ku centre, ASN allow-set, handover slots |
+| `packages/core/src/orbit/doppler.ts` | 17 | Classical one-way shift |
+| `packages/core/src/crypto/keccak.ts` | 127 | Keccak-f[1600] with Ethereum `0x01` padding |
+| `packages/core/src/crypto/abi.ts` | 83 | Static-type ABI words, including int32 sign extension |
+| `packages/core/src/crypto/eip712.ts` | 68 | Type hashes, domain separator, typed-data digest |
+| `packages/core/src/telemetry/parse.ts` | 123 | Local Device API JSON, camelCase and snake_case |
+| `packages/core/src/telemetry/features.ts` | 86 | Integer feature vector, handover slot, telemetry hash |
+| `packages/core/src/telemetry/privacy.ts` | 34 | GPS removal, terminal id hashing |
+| `packages/core/src/telemetry/asn.ts` | 27 | AS14593 / AS45700 allow-set |
+| `packages/core/src/pipeline.ts` | 75 | The four steps, end to end |
+| `contracts/src/SkyRelayBeacon.sol` | 157 | The verifier |
+| `scripts/build-vectors.ts` | 266 | Regenerates fixtures and digest vectors from real passes |
+| `scripts/verify-pipeline.ts` | 132 | `pnpm verify` |
+
+## Tests
+
+**28 TypeScript** (`node:test`) and **20 Solidity** (Foundry, including two fuzz suites).
+
+The ones that carry weight:
+
+| Test | Guards against |
+|---|---|
+| `Vallado ... velocity matches the published verification output` | the unit error that made every Doppler 13.4× too small |
+| `velocity agrees with the numerical derivative of position` | the same class of error, without needing a reference table |
+| `range-rate is the time derivative of range` | a missing ω × r transport term |
+| `a station at zero altitude lies on the WGS-72 ellipsoid` | the spherical-Earth shortcut |
+| `a point on the local vertical is at 90 degrees elevation` | the zenith `asin` domain error — this one only failed on CI |
+| `pipeline rejects a boresight no catalog satellite explains` | the geometry gate silently degrading |
+| `committed digest vectors match what the pipeline produces today` | stale cross-implementation vectors |
+| `test_solidityReproducesEveryTypescriptDigest` | TypeScript and solc disagreeing on the encoding |
+| `test_everyFieldIsCommitted` | an encoder that silently drops a struct member |
+| `test_frontRunnerCannotStealABeacon` | mempool theft of a signed attestation |
 
 ## What this proves / does not prove
 
@@ -129,10 +293,39 @@ Zero runtime npm dependencies in `@skyrelay/core`. `tsx` / `typescript` are inst
 
 ## Known limits
 
-- **One attester.** `attester` is a single immutable EOA. Every on-chain check runs on data that key signed, so the checks defend against a *buggy* attester, never a lying one. A quorum of independent stations — where several receivers must agree on the Doppler of the same satellite — is the obvious next step and is not implemented here.
-- **The attestation is a location fingerprint.** Stripping GPS from the capture does not hide much: `(noradId, elevation, doppler, timestamp)` against a public TLE constrains the observer to a narrow region, and a few beacons pin it.
+- **One attester.** `attester` is a single immutable EOA. Every on-chain check runs on data that key signed, so the checks defend against a *buggy* attester, never a lying one. Key compromise means redeploying.
+- **The attestation is a location fingerprint.** Stripping GPS from the capture does not hide much: `(noradId, elevation, doppler, timestamp)` against a public TLE constrains the observer to a narrow region, and a few beacons pin it. Treat the station location as public.
 - **`dishGetStatus.snr` is deprecated.** Recent terminal firmware stopped populating it, so `extractFeatures` will reject captures from a current dish until the feature set moves to a field that is still served. The fixtures use the documented field.
 - **`usedDigest` grows without bound** — one permanent storage slot per beacon, load-bearing only for the 120 s TTL.
+- **`totalEnergy` is a placeholder.** Summing SNR in millidB is not a physical energy and should not be used as a reward basis as-is.
+- **The fixtures are synthetic.** The dish payloads are schema-faithful reconstructions; only the geometry is real. `vectors/README.md` says exactly which parts are which.
+
+## What would make this stronger
+
+Listed in the order that would actually move the trust model, not the order that is easiest:
+
+1. **A quorum of independent stations.** Several receivers attesting the same satellite at the same second, where the elevation and Doppler each one reports must be mutually consistent with a single orbit. That is a measurement a single liar cannot produce, and it is the one change that removes the single-key assumption.
+2. **On-chain commitment to the element set.** Publish the catalog hash the attestation was resolved against, so a verifier can check the geometry was not computed from a doctored TLE.
+3. **Per-frequency Doppler tracking.** A time series of Doppler across a pass has a shape fixed by orbital mechanics; matching that shape is far harder to fake than matching one instant.
+4. **Feature migration off `snr`.** Whatever current firmware still populates.
+
+None of these are implemented here, and the repository does not claim otherwise.
+
+## FAQ
+
+**Do satellites validate blocks?** No. Nothing runs in orbit. The satellites are the subject of a measurement, not participants.
+
+**Is this affiliated with SpaceX or Starlink?** No, in any sense. It consumes a JSON file a terminal you own serves on your own LAN, plus public catalogs.
+
+**Could I fake a beacon?** If you hold the attester key, trivially — see [Known limits](#known-limits). Without it, you would need to find a station, an instant and a real element set that agree to within 2°, which is work but not impossible. The geometry gate raises the cost; it does not make forgery impossible.
+
+**Why implement SGP4 and Keccak from scratch instead of using a library?** For Keccak, so the digest the pipeline produces can be *compared* against solc rather than trusted — two implementations sharing a dependency prove nothing. For SGP4, so the WGS-72 constants, the frame conversions and the error budget are all visible and testable in one place. Both are pinned against external references.
+
+**Why WGS-72 and not WGS-84?** TLEs are fitted in WGS-72. Substituting WGS-84 constants biases TEME positions by hundreds of metres.
+
+**Is it on mainnet?** No address is published. `foundry.toml` carries the RPC aliases; deployment is left to whoever runs it.
+
+---
 
 Independent protocol. Not affiliated with SpaceX.
 
