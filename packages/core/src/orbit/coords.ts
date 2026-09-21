@@ -142,7 +142,11 @@ export function lookAngles(
   const south = slat * clon * rx + slat * slon * ry - clat * rz;
   const east = -slon * rx + clon * ry;
   const up = clat * clon * rx + clat * slon * ry + slat * rz;
-  const elevationDeg = Math.asin(up / range) * RAD2DEG;
+  // Clamp before asin: for a satellite at the zenith, up/range rounds to
+  // slightly above 1 and asin returns NaN. The arithmetic is platform
+  // dependent, so an unclamped call fails on some Node versions and not others.
+  const sinElevation = Math.min(1, Math.max(-1, up / range));
+  const elevationDeg = Math.asin(sinElevation) * RAD2DEG;
   let azimuthDeg = Math.atan2(east, -south) * RAD2DEG;
   if (azimuthDeg < 0) azimuthDeg += 360;
   const losX = rx / range;
