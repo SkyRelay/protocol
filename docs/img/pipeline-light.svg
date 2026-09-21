@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 390" width="920" height="390" role="img" aria-label="SkyRelay pipeline: ingest, features, geometry, digest, then the on-chain verifier">
+<defs><marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 z" fill="#8c959f"/></marker><marker id="r" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 z" fill="#cf222e"/></marker></defs>
+<rect x="18" y="46" width="206" height="118" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="32.0" y="71.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">1</text>
+<text x="48.0" y="71.0" fill="#1f2328" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" text-anchor="start" letter-spacing="1.4">INGEST</text>
+<line x1="32" y1="80" x2="210" y2="80" stroke="#d0d7de"/>
+<text x="32.0" y="101.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="600" text-anchor="start" letter-spacing="0">parseCapture</text>
+<text x="32.0" y="119.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">stripPrivateFields</text>
+<text x="32.0" y="141.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">GPS and terminal id</text>
+<text x="32.0" y="155.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">never leave the LAN</text>
+<line x1="228" y1="105.0" x2="242" y2="105.0" stroke="#8c959f" stroke-width="1.6" marker-end="url(#a)"/>
+<rect x="248" y="46" width="206" height="118" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="262.0" y="71.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">2</text>
+<text x="278.0" y="71.0" fill="#1f2328" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" text-anchor="start" letter-spacing="1.4">FEATURES</text>
+<line x1="262" y1="80" x2="440" y2="80" stroke="#d0d7de"/>
+<text x="262.0" y="101.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="600" text-anchor="start" letter-spacing="0">extractFeatures</text>
+<text x="262.0" y="119.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">assertStarlinkAsn</text>
+<text x="262.0" y="141.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">integers only, so the</text>
+<text x="262.0" y="155.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">chain sees no floats</text>
+<line x1="458" y1="105.0" x2="472" y2="105.0" stroke="#8c959f" stroke-width="1.6" marker-end="url(#a)"/>
+<line x1="351.0" y1="168" x2="351.0" y2="200" stroke="#cf222e" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#r)"/>
+<text x="351.0" y="218.0" fill="#cf222e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="600" text-anchor="middle" letter-spacing="0">AS15169 rejected</text>
+<rect x="478" y="46" width="206" height="118" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="492.0" y="71.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">3</text>
+<text x="508.0" y="71.0" fill="#1f2328" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" text-anchor="start" letter-spacing="1.4">GEOMETRY</text>
+<line x1="492" y1="80" x2="670" y2="80" stroke="#d0d7de"/>
+<text x="492.0" y="101.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="600" text-anchor="start" letter-spacing="0">matchBoresight</text>
+<text x="492.0" y="119.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">SGP4 + public TLEs</text>
+<text x="492.0" y="141.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">which real satellite</text>
+<text x="492.0" y="155.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">explains the pointing?</text>
+<line x1="688" y1="105.0" x2="702" y2="105.0" stroke="#8c959f" stroke-width="1.6" marker-end="url(#a)"/>
+<line x1="581.0" y1="168" x2="581.0" y2="200" stroke="#cf222e" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#r)"/>
+<text x="581.0" y="218.0" fill="#cf222e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="600" text-anchor="middle" letter-spacing="0">16.68° off rejected</text>
+<rect x="708" y="46" width="206" height="118" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
+<text x="722.0" y="71.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">4</text>
+<text x="738.0" y="71.0" fill="#1f2328" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" text-anchor="start" letter-spacing="1.4">DIGEST</text>
+<line x1="722" y1="80" x2="900" y2="80" stroke="#d0d7de"/>
+<text x="722.0" y="101.0" fill="#0969da" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="600" text-anchor="start" letter-spacing="0">hashTypedData</text>
+<text x="722.0" y="119.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">EIP-712 typed data</text>
+<text x="722.0" y="141.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">byte-identical to</text>
+<text x="722.0" y="155.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">solc hashAttestation</text>
+<text x="21.0" y="28.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" text-anchor="start" letter-spacing="0">a capture is attested only if it survives all four — nothing degrades to a softer check</text>
+<text x="484.0" y="258.0" fill="#cf222e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="middle" letter-spacing="0">negative fixtures prove each gate bites</text>
+<rect x="18" y="288" width="884" height="76" rx="8" fill="#f6f8fa" stroke="#bf8700"/>
+<line x1="811.0" y1="168" x2="811.0" y2="282" stroke="#8c959f" stroke-width="1.6" marker-end="url(#a)"/>
+<text x="36.0" y="314.0" fill="#bf8700" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">SkyRelayBeacon</text>
+<text x="168.0" y="314.0" fill="#59636e" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">on BNB Smart Chain</text>
+<circle cx="39" cy="332" r="2.6" fill="#1a7f37"/>
+<text x="49.0" y="336.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">operator == msg.sender</text>
+<circle cx="329" cy="332" r="2.6" fill="#1a7f37"/>
+<text x="339.0" y="336.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">asn ∈ {14593, 45700}</text>
+<circle cx="619" cy="332" r="2.6" fill="#1a7f37"/>
+<text x="629.0" y="336.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">elevation &gt; 0</text>
+<circle cx="39" cy="349" r="2.6" fill="#1a7f37"/>
+<text x="49.0" y="353.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">timestamp within 120 s</text>
+<circle cx="329" cy="349" r="2.6" fill="#1a7f37"/>
+<text x="339.0" y="353.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">digest unused</text>
+<circle cx="619" cy="349" r="2.6" fill="#1a7f37"/>
+<text x="629.0" y="353.0" fill="#59636e" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">ecrecover == attester</text>
+</svg>

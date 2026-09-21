@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 486" width="920" height="486" role="img" aria-label="How Starlink and BNB Smart Chain relate: three independent inputs, an off-chain pipeline, an attester key, and the on-chain verifier">
+<defs><marker id="d" markerWidth="9" markerHeight="9" refX="7" refY="3.2" orient="auto"><path d="M0,0 L7,3.2 L0,6.4 z" fill="#6e7681"/></marker></defs>
+<text x="24.0" y="30.0" fill="#e6edf3" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="15" font-weight="700" text-anchor="start" letter-spacing="0">How Starlink and BNB Smart Chain relate</text>
+<text x="24.0" y="50.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="400" text-anchor="start" letter-spacing="0">three independent inputs, one off-chain pipeline, one signing key, one contract</text>
+<rect x="24" y="64" width="872" height="42" rx="6" fill="#161b22" stroke="#f85149" opacity="0.95"/>
+<text x="40.0" y="82.0" fill="#f85149" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="14" font-weight="700" text-anchor="start" letter-spacing="0">✕</text>
+<text x="60.0" y="82.0" fill="#f85149" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" font-weight="700" text-anchor="start" letter-spacing="0">There is no data path from SpaceX to the chain.</text>
+<text x="60.0" y="98.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">The terminal serves an unauthenticated JSON file on your LAN. SpaceX does not sign it, and is not affiliated with this protocol.</text>
+<rect x="24" y="122" width="280" height="112" rx="8" fill="#161b22" stroke="#30363d"/>
+<rect x="38" y="135" width="82" height="17" rx="8.5" fill="#58a6ff" opacity="0.14"/>
+<text x="46.0" y="147.0" fill="#58a6ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="700" text-anchor="start" letter-spacing="1.2">PHYSICAL</text>
+<text x="38.0" y="172.0" fill="#e6edf3" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">Starlink user terminal</text>
+<text x="38.0" y="192.0" fill="#9198a1" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">gRPC 192.168.100.1:9200</text>
+<text x="38.0" y="207.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">SNR, boresight, throughput</text>
+<text x="38.0" y="222.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">forgeable on its own</text>
+<line x1="164.0" y1="237" x2="164.0" y2="262" stroke="#6e7681" stroke-width="1.5" marker-end="url(#d)"/>
+<rect x="322" y="122" width="280" height="112" rx="8" fill="#161b22" stroke="#30363d"/>
+<rect x="336" y="135" width="70" height="17" rx="8.5" fill="#3fb950" opacity="0.14"/>
+<text x="344.0" y="147.0" fill="#3fb950" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="700" text-anchor="start" letter-spacing="1.2">PUBLIC</text>
+<text x="336.0" y="172.0" fill="#e6edf3" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">CelesTrak GP catalog</text>
+<text x="336.0" y="192.0" fill="#9198a1" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">two-line element sets</text>
+<text x="336.0" y="207.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">where every satellite was</text>
+<text x="336.0" y="222.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">anyone fetches the same file</text>
+<line x1="462.0" y1="237" x2="462.0" y2="262" stroke="#6e7681" stroke-width="1.5" marker-end="url(#d)"/>
+<rect x="620" y="122" width="280" height="112" rx="8" fill="#161b22" stroke="#30363d"/>
+<rect x="634" y="135" width="70" height="17" rx="8.5" fill="#3fb950" opacity="0.14"/>
+<text x="642.0" y="147.0" fill="#3fb950" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="10" font-weight="700" text-anchor="start" letter-spacing="1.2">PUBLIC</text>
+<text x="634.0" y="172.0" fill="#e6edf3" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">BGP / ASN registry</text>
+<text x="634.0" y="192.0" fill="#9198a1" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">AS14593 · AS45700</text>
+<text x="634.0" y="207.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">which network the egress</text>
+<text x="634.0" y="222.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">actually sits on</text>
+<line x1="760.0" y1="237" x2="760.0" y2="262" stroke="#6e7681" stroke-width="1.5" marker-end="url(#d)"/>
+<rect x="24" y="266" width="872" height="70" rx="8" fill="#161b22" stroke="#30363d"/>
+<text x="42.0" y="292.0" fill="#e6edf3" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="13" font-weight="700" text-anchor="start" letter-spacing="0">SkyRelay pipeline</text>
+<text x="180.0" y="292.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">runs on the operator's own machine — off-chain, no server, no database</text>
+<text x="42.0" y="316.0" fill="#58a6ff" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="600" text-anchor="start" letter-spacing="0">parse → strip GPS → ASN filter → SGP4 boresight match → EIP-712 digest</text>
+<line x1="460.0" y1="339" x2="460.0" y2="362" stroke="#6e7681" stroke-width="1.5" marker-end="url(#d)"/>
+<rect x="250.0" y="362" width="420" height="44" rx="8" fill="#161b22" stroke="#d29922"/>
+<text x="460.0" y="389.0" fill="#d29922" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="700" text-anchor="middle" letter-spacing="0">the attester key signs the digest  (secp256k1)</text>
+<line x1="24" y1="424" x2="896" y2="424" stroke="#f85149" stroke-width="1.2" stroke-dasharray="7 5"/>
+<text x="894.0" y="417.0" fill="#f85149" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="600" text-anchor="end" letter-spacing="0">trust boundary — everything below is this one key's word</text>
+<rect x="24" y="438" width="872" height="40" rx="8" fill="#161b22" stroke="#d29922"/>
+<text x="42.0" y="463.0" fill="#d29922" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="12" font-weight="700" text-anchor="start" letter-spacing="0">SkyRelayBeacon</text>
+<text x="168.0" y="463.0" fill="#9198a1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" font-weight="400" text-anchor="start" letter-spacing="0">BNB Smart Chain</text>
+<text x="878.0" y="463.0" fill="#9198a1" font-family="ui-monospace,'SF Mono',Menlo,Consolas,monospace" font-size="11" font-weight="400" text-anchor="end" letter-spacing="0">operator · ASN · elevation · TTL · replay · ecrecover</text>
+</svg>
