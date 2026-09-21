@@ -9,7 +9,7 @@ export const EIP712_DOMAIN_NAME = "SkyRelay";
 export const EIP712_DOMAIN_VERSION = "1";
 
 export const ATTESTATION_TYPE_STRING =
-  "SkyRelayAttestation(address operator,bytes32 telemetryHash,uint32 noradId,int32 elevationMilliDeg,int32 dopplerHz,uint32 snrMilliDb,uint32 asn,uint64 timestamp)";
+  "SkyRelayAttestation(address operator,bytes32 telemetryHash,bytes32 catalogHash,uint32 noradId,int32 elevationMilliDeg,int32 dopplerHz,uint32 snrMilliDb,uint32 asn,uint64 timestamp)";
 
 export const DOMAIN_TYPE_STRING =
   "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)";
@@ -21,6 +21,8 @@ export type SkyRelayAttestation = {
   /** The only address the contract will accept as msg.sender for this beacon. */
   operator: `0x${string}`;
   telemetryHash: `0x${string}`;
+  /** Commits to the element sets the geometry was resolved against. */
+  catalogHash: `0x${string}`;
   noradId: number;
   elevationMilliDeg: number;
   dopplerHz: number;
@@ -52,6 +54,7 @@ export function hashStruct(att: SkyRelayAttestation): Uint8Array {
       bytes32(ATTESTATION_TYPEHASH),
       address(att.operator),
       bytes32(att.telemetryHash),
+      bytes32(att.catalogHash),
       u32(att.noradId),
       i32(att.elevationMilliDeg),
       i32(att.dopplerHz),

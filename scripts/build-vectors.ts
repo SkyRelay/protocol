@@ -18,7 +18,8 @@ import { fileURLToPath } from "node:url";
 import { parse3le } from "../packages/core/src/orbit/tle.ts";
 import { observe, type Station } from "../packages/core/src/orbit/pass.ts";
 import { runPipeline } from "../packages/core/src/pipeline.ts";
-import { OPERATOR, readCatalog, readDomain } from "./shared.ts";
+import { runQuorum } from "../packages/core/src/quorum.ts";
+import { operatorFor, readCatalog, readDomain } from "./shared.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -28,6 +29,14 @@ const GENESIS_01: Station = {
   latDeg: 18.23,
   lonDeg: 109.51,
   altKm: 0.05,
+};
+
+const MERIDIAN_04: Station = {
+  id: "MERIDIAN-04",
+  name: "Haikou",
+  latDeg: 20.04,
+  lonDeg: 110.32,
+  altKm: 0.015,
 };
 
 const MV_ANYUAN: Station = {
@@ -156,6 +165,50 @@ const scenarios: Scenario[] = [
     egress: { asn: 45700, asOrg: "IDNIC-STARLINK-AS-ID", prefix: "103.152.0.0/22" },
   },
   {
+    id: "quorum-haikou-007",
+    capturedAt: "2026-09-20T15:30:03.210Z",
+    tle: "starlink-1008",
+    station: MERIDIAN_04,
+    notes:
+      "Second station of a three-way quorum: a different terminal 210 km away sees the same STARLINK-1008 at the same second, from a different elevation and with a different Doppler shift.",
+    jitter: { az: -0.12, el: 0.09 },
+    status: {
+      deviceInfo: { ...UT, id: "ut01000000-00000000-00b4d21a" },
+      deviceState: { uptimeS: 903412 },
+      state: "Connected",
+      snr: 8.1,
+      downlinkThroughputBps: 164200000,
+      uplinkThroughputBps: 16700000,
+      popPingLatencyMs: 41.2,
+      popPingDropRate: 0.004,
+      obstructionStats: { fractionObstructed: 0.0102 },
+    },
+    diagnostics: { ...UT, id: "ut01000000-00000000-00b4d21a", disablementCode: "OKAY" },
+    egress: { asn: 14593, asOrg: "SPACEX-STARLINK", prefix: "98.97.12.0/24" },
+  },
+  {
+    id: "quorum-anyuan-009",
+    capturedAt: "2026-09-20T15:30:03.210Z",
+    tle: "starlink-1008",
+    station: MV_ANYUAN,
+    notes:
+      "Third station of the same quorum, at sea on AS45700 and 460 km from the first. Lowest elevation and the smallest Doppler of the three, because it is furthest from the ground track.",
+    jitter: { az: 0.16, el: -0.1 },
+    status: {
+      deviceInfo: { ...UT, id: "ut01000000-00000000-00f7e330", hardwareVersion: "rev3_proto2" },
+      deviceState: { uptimeS: 388104 },
+      state: "Connected",
+      snr: 6.9,
+      downlinkThroughputBps: 88300000,
+      uplinkThroughputBps: 8600000,
+      popPingLatencyMs: 58.7,
+      popPingDropRate: 0.019,
+      obstructionStats: { fractionObstructed: 0.0008 },
+    },
+    diagnostics: { ...UT, id: "ut01000000-00000000-00f7e330", hardwareVersion: "rev3_proto2", disablementCode: "OKAY" },
+    egress: { asn: 45700, asOrg: "IDNIC-STARLINK-AS-ID", prefix: "103.152.0.0/22" },
+  },
+  {
     id: "bad-asn-005",
     negative: true,
     capturedAt: "2026-09-20T15:30:03.210Z",
@@ -256,11 +309,56 @@ for (const s of scenarios) {
 const domain = readDomain(root);
 const catalog = readCatalog(root);
 const attestations = positives.map(({ id, frame, station }) => {
-  const out = runPipeline({ capture: frame, catalog, station, domain, operator: OPERATOR });
+  const out = runPipeline({
+    capture: frame,
+    catalog,
+    station,
+    domain,
+    operator: operatorFor(station.id),
+  });
   return { id, ...out.attestation, digest: out.digest };
 });
+
+/**
+ * Three stations, one satellite, one second. The contract requires every member
+ * of a quorum to agree on noradId, timestamp and catalogHash while reporting
+ * its own elevation and Doppler, so this grouping is what exercises that.
+ */
+const QUORUM_IDS = ["connected-001", "quorum-haikou-007", "quorum-anyuan-009"];
+const quorumMembers = QUORUM_IDS.map((id) => {
+  const entry = positives.find((p) => p.id === id);
+  if (!entry) throw new Error(`quorum member ${id} is not a positive fixture`);
+  return { capture: entry.frame, station: entry.station, operator: operatorFor(entry.station.id) };
+});
+const q = runQuorum({ members: quorumMembers, catalog, domain });
+
 writeFileSync(
   join(root, "vectors/eip712/attestations.json"),
-  `${JSON.stringify({ domain, count: attestations.length, attestations }, null, 2)}\n`,
+  `${JSON.stringify(
+    {
+      domain,
+      count: attestations.length,
+      attestations,
+      quorum: {
+        members: QUORUM_IDS,
+        noradId: q.noradId,
+        timestamp: q.timestamp,
+        catalogHash: q.catalogHash,
+        worstBoresightResidualDeg: Number(q.worstBoresightResidualDeg.toFixed(6)),
+      },
+    },
+    null,
+    2,
+  )}\n`,
 );
 console.log(`\nvectors/eip712/attestations.json  ${attestations.length} digest vectors`);
+console.log(
+  `quorum  NORAD ${q.noradId}  t=${q.timestamp}  ${QUORUM_IDS.length} stations  ` +
+    `worst residual ${q.worstBoresightResidualDeg.toFixed(3)}\u00b0`,
+);
+for (const r of q.reports) {
+  console.log(
+    `        ${r.capture.source.padEnd(30)} el=${(r.attestation.elevationMilliDeg / 1000).toFixed(2).padStart(6)}\u00b0  ` +
+      `fd=${String(r.attestation.dopplerHz).padStart(8)} Hz  ASN ${r.attestation.asn}`,
+  );
+}

@@ -1,0 +1,46 @@
+{
+  "id": "quorum-anyuan-009",
+  "capturedAt": "2026-09-20T15:30:03.210Z",
+  "source": "lan-grpc://192.168.100.1:9200",
+  "method": "SpaceX.API.Device.Device/Handle",
+  "notes": "Third station of the same quorum, at sea on AS45700 and 460 km from the first. Lowest elevation and the smallest Doppler of the three, because it is furthest from the ground track.",
+  "station": {
+    "id": "MV-ANYUAN",
+    "latDeg": 15.8,
+    "lonDeg": 113.2,
+    "altKm": 0.012
+  },
+  "expectNoradId": 44714,
+  "dishGetStatus": {
+    "deviceInfo": {
+      "id": "ut01000000-00000000-00f7e330",
+      "hardwareVersion": "rev3_proto2",
+      "softwareVersion": "2026.07.06.mr81950"
+    },
+    "deviceState": {
+      "uptimeS": 388104
+    },
+    "state": "Connected",
+    "snr": 6.9,
+    "downlinkThroughputBps": 88300000,
+    "uplinkThroughputBps": 8600000,
+    "popPingLatencyMs": 58.7,
+    "popPingDropRate": 0.019,
+    "obstructionStats": {
+      "fractionObstructed": 0.0008
+    },
+    "boresightAzimuthDeg": 279.415,
+    "boresightElevationDeg": 25.812
+  },
+  "dishGetDiagnostics": {
+    "id": "ut01000000-00000000-00f7e330",
+    "hardwareVersion": "rev3_proto2",
+    "softwareVersion": "2026.07.06.mr81950",
+    "disablementCode": "OKAY"
+  },
+  "egress": {
+    "asn": 45700,
+    "asOrg": "IDNIC-STARLINK-AS-ID",
+    "prefix": "103.152.0.0/22"
+  }
+}

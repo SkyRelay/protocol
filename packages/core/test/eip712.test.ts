@@ -18,6 +18,7 @@ const DOMAIN: Eip712Domain = {
 const ATT: SkyRelayAttestation = {
   operator: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
   telemetryHash: `0x${"11".repeat(32)}`,
+  catalogHash: `0x${"22".repeat(32)}`,
   noradId: 44714,
   elevationMilliDeg: 54180,
   dopplerHz: -182000,
@@ -34,12 +35,19 @@ test("EIP-712 domain typehash matches the canonical Ethereum string", () => {
 });
 
 test("attestation typehash is pinned", () => {
-  assert.equal(ATTESTATION_TYPEHASH, "0x3ef74e5ab3e68a910b640f4b2d211ddb61f06e52f18da48417abca1644024a79");
+  assert.equal(ATTESTATION_TYPEHASH, "0x7a58c180076695c85beb4e05dff21f8bb13e5e0a32990285cc35d08f7a45cf9c");
   assert.equal(ATTESTATION_TYPEHASH, keccak256Hex(utf8(ATTESTATION_TYPE_STRING)));
 });
 
-test("the type string carries the operator as its first member", () => {
+test("the type string carries the operator first and commits to the catalog", () => {
   assert.ok(ATTESTATION_TYPE_STRING.startsWith("SkyRelayAttestation(address operator,"));
+  assert.ok(ATTESTATION_TYPE_STRING.includes("bytes32 catalogHash,"));
+});
+
+test("a different catalog gives a different digest", () => {
+  const a = hashTypedData(ATT, DOMAIN);
+  const b = hashTypedData({ ...ATT, catalogHash: `0x${"33".repeat(32)}` }, DOMAIN);
+  assert.notEqual(a, b);
 });
 
 test("digest changes if chainId changes", () => {

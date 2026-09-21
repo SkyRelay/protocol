@@ -15,7 +15,8 @@ import { propagateTle } from "../packages/core/src/orbit/sgp4.ts";
 import type { Station } from "../packages/core/src/orbit/pass.ts";
 import { runPipeline } from "../packages/core/src/pipeline.ts";
 import { ATTESTATION_TYPEHASH, DOMAIN_TYPEHASH } from "../packages/core/src/crypto/eip712.ts";
-import { OPERATOR, readCatalog, readDomain } from "./shared.ts";
+import { runQuorum } from "../packages/core/src/quorum.ts";
+import { operatorFor, readCatalog, readDomain } from "./shared.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const domain = readDomain(root);
@@ -82,7 +83,7 @@ for (const file of frames) {
   let out: ReturnType<typeof runPipeline> | undefined;
   let error: Error | undefined;
   try {
-    out = runPipeline({ capture, catalog, station, domain, operator: OPERATOR });
+    out = runPipeline({ capture, catalog, station, domain, operator: operatorFor(station.id) });
   } catch (e) {
     error = e as Error;
   }
@@ -113,6 +114,54 @@ for (const file of frames) {
 if (passed < 3) fail(`expected >= 3 positive frames, got ${passed}`);
 if (rejected < Object.keys(EXPECTED_REJECTION).length) fail("not every negative fixture ran");
 
+// --- quorum: three stations, one satellite, one second ---
+{
+  const ids: string[] = JSON.parse(
+    readFileSync(join(root, "vectors/eip712/attestations.json"), "utf8"),
+  ).quorum.members;
+  const members = ids.map((id) => {
+    const capture = JSON.parse(readFileSync(join(root, "vectors/frames", `${id}.json`), "utf8"));
+    const station = capture.station as Station;
+    return { capture, station, operator: operatorFor(station.id) };
+  });
+
+  const q = runQuorum({ members, catalog, domain });
+  ok(
+    `quorum NORAD ${q.noradId} at t=${q.timestamp}: ${q.reports.length} stations agree, ` +
+      `worst boresight residual ${q.worstBoresightResidualDeg.toFixed(3)}\u00b0`,
+  );
+  for (let i = 0; i < q.reports.length; i++) {
+    const r = q.reports[i]!;
+    console.log(
+      `       ${ids[i]!.padEnd(20)} ${members[i]!.station.id.padEnd(12)} ` +
+        `el=${(r.attestation.elevationMilliDeg / 1000).toFixed(2).padStart(6)}\u00b0  ` +
+        `fd=${String(r.attestation.dopplerHz).padStart(8)} Hz  ASN ${r.attestation.asn}`,
+    );
+  }
+
+  const elevations = new Set(q.reports.map((r) => r.attestation.elevationMilliDeg));
+  if (elevations.size !== q.reports.length) {
+    fail("quorum members reported identical geometry; they are not independent observations");
+  }
+
+  // a member that saw a different second must not be admitted
+  const stray = JSON.parse(
+    readFileSync(join(root, "vectors/frames/handover-002.json"), "utf8"),
+  );
+  try {
+    runQuorum({
+      members: [members[0]!, { capture: stray, station: stray.station, operator: operatorFor("MERIDIAN-04") }],
+      catalog,
+      domain,
+    });
+    fail("a quorum spanning two different seconds was accepted");
+  } catch (e) {
+    const message = (e as Error).message;
+    if (!/disagrees on the second/.test(message)) fail(`quorum rejected for the wrong reason: ${message}`);
+    ok(`quorum rejects a member from another second: ${message}`);
+  }
+}
+
 console.log("\nUnit tests");
 execSync("pnpm test", { cwd: root, stdio: "inherit" });
 
@@ -127,6 +176,7 @@ try {
 }
 
 console.log(`
-RESULT  positive=${passed}  negative=${rejected}  forge=pass
-        pipeline closed: gRPC JSON → ASN filter → SGP4 boresight match → EIP-712 → BSC ecrecover
+RESULT  positive=${passed}  negative=${rejected}  quorum=3 stations  forge=pass
+        pipeline closed: gRPC JSON → ASN filter → SGP4 boresight match → catalog commitment
+                       → EIP-712 → BSC quorum verifier
 `);

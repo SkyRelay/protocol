@@ -12,7 +12,7 @@ import {
   type BoresightSighting,
   type Station,
 } from "./orbit/pass.ts";
-import type { Tle } from "./orbit/tle.ts";
+import { catalogHash, type Tle } from "./orbit/tle.ts";
 
 export type PipelineInput = {
   capture: unknown;
@@ -32,6 +32,7 @@ export type PipelineOutput = {
   sighting: BoresightSighting;
   attestation: SkyRelayAttestation;
   digest: `0x${string}`;
+  catalogHash: `0x${string}`;
 };
 
 /**
@@ -61,9 +62,11 @@ export function runPipeline(input: PipelineInput): PipelineOutput {
     input.boresightToleranceDeg,
   );
 
+  const catalog = catalogHash(input.catalog);
   const attestation: SkyRelayAttestation = {
     operator: input.operator,
     telemetryHash: features.telemetryHash,
+    catalogHash: catalog,
     noradId: sighting.noradId,
     elevationMilliDeg: Math.round(sighting.elevationDeg * 1000),
     dopplerHz: Math.round(sighting.dopplerHz),
@@ -71,5 +74,12 @@ export function runPipeline(input: PipelineInput): PipelineOutput {
     asn: features.asn,
     timestamp: features.timestampSec,
   };
-  return { capture, features, sighting, attestation, digest: hashTypedData(attestation, input.domain) };
+  return {
+    capture,
+    features,
+    sighting,
+    attestation,
+    catalogHash: catalog,
+    digest: hashTypedData(attestation, input.domain),
+  };
 }

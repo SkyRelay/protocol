@@ -22,13 +22,14 @@ contract Eip712VectorsTest is Test {
         json = vm.readFile("../vectors/eip712/attestations.json");
         chainId = vm.parseJsonUint(json, ".domain.chainId");
         verifyingContract = vm.parseJsonAddress(json, ".domain.verifyingContract");
-        beacon = new SkyRelayBeacon(makeAddr("attester"), makeAddr("vault"));
+        beacon = new SkyRelayBeacon(makeAddr("owner"), makeAddr("attester"), makeAddr("vault"));
     }
 
     function _at(uint256 i) internal view returns (SkyRelayBeacon.SkyRelayAttestation memory a) {
         string memory k = string.concat(".attestations[", vm.toString(i), "]");
         a.operator = vm.parseJsonAddress(json, string.concat(k, ".operator"));
         a.telemetryHash = vm.parseJsonBytes32(json, string.concat(k, ".telemetryHash"));
+        a.catalogHash = vm.parseJsonBytes32(json, string.concat(k, ".catalogHash"));
         a.noradId = uint32(vm.parseJsonUint(json, string.concat(k, ".noradId")));
         a.elevationMilliDeg = int32(vm.parseJsonInt(json, string.concat(k, ".elevationMilliDeg")));
         a.dopplerHz = int32(vm.parseJsonInt(json, string.concat(k, ".dopplerHz")));
@@ -52,7 +53,7 @@ contract Eip712VectorsTest is Test {
         assertEq(
             beacon.ATTESTATION_TYPEHASH(),
             keccak256(
-                "SkyRelayAttestation(address operator,bytes32 telemetryHash,uint32 noradId,int32 elevationMilliDeg,int32 dopplerHz,uint32 snrMilliDb,uint32 asn,uint64 timestamp)"
+                "SkyRelayAttestation(address operator,bytes32 telemetryHash,bytes32 catalogHash,uint32 noradId,int32 elevationMilliDeg,int32 dopplerHz,uint32 snrMilliDb,uint32 asn,uint64 timestamp)"
             )
         );
     }
@@ -70,6 +71,10 @@ contract Eip712VectorsTest is Test {
         m = base;
         m.telemetryHash = base.telemetryHash ^ bytes32(uint256(1));
         assertTrue(beacon.hashAttestation(m, chainId, verifyingContract) != d, "telemetryHash");
+
+        m = base;
+        m.catalogHash = base.catalogHash ^ bytes32(uint256(1));
+        assertTrue(beacon.hashAttestation(m, chainId, verifyingContract) != d, "catalogHash");
 
         m = base;
         m.noradId = base.noradId + 1;
@@ -94,6 +99,51 @@ contract Eip712VectorsTest is Test {
         m = base;
         m.timestamp = base.timestamp + 1;
         assertTrue(beacon.hashAttestation(m, chainId, verifyingContract) != d, "timestamp");
+    }
+
+    /// @notice The committed quorum must satisfy on chain exactly what
+    ///         `verifyAndRecord` demands of it: every member agreeing on the
+    ///         satellite, the second and the element set, while reporting its
+    ///         own geometry. A fixture that could not pass InconsistentQuorum
+    ///         would be documenting something the contract does not accept.
+    function test_committedQuorumWouldSatisfyTheOnChainAgreementCheck() public view {
+        string[] memory ids = vm.parseJsonStringArray(json, ".quorum.members");
+        assertGe(ids.length, 2, "a quorum needs at least two stations");
+
+        uint32 noradId = uint32(vm.parseJsonUint(json, ".quorum.noradId"));
+        uint64 timestamp = uint64(vm.parseJsonUint(json, ".quorum.timestamp"));
+        bytes32 catalog = vm.parseJsonBytes32(json, ".quorum.catalogHash");
+
+        uint256 count = vm.parseJsonUint(json, ".count");
+        uint256 seen;
+        int32[] memory elevations = new int32[](ids.length);
+
+        for (uint256 m = 0; m < ids.length; m++) {
+            for (uint256 i = 0; i < count; i++) {
+                string memory k = string.concat(".attestations[", vm.toString(i), "]");
+                if (keccak256(bytes(vm.parseJsonString(json, string.concat(k, ".id")))) != keccak256(bytes(ids[m]))) {
+                    continue;
+                }
+
+                SkyRelayBeacon.SkyRelayAttestation memory a = _at(i);
+                assertEq(a.noradId, noradId, ids[m]);
+                assertEq(a.timestamp, timestamp, ids[m]);
+                assertEq(a.catalogHash, catalog, ids[m]);
+                assertGt(a.elevationMilliDeg, 0, ids[m]);
+                elevations[m] = a.elevationMilliDeg;
+                seen++;
+                break;
+            }
+        }
+        assertEq(seen, ids.length, "every quorum member must be a committed vector");
+
+        // Different places see the same satellite at different elevations; a set
+        // that agreed on everything would not be independent observation.
+        bool differs;
+        for (uint256 i = 1; i < elevations.length; i++) {
+            if (elevations[i] != elevations[0]) differs = true;
+        }
+        assertTrue(differs, "stations must report distinct geometry");
     }
 
     /// @dev Negative Doppler is the case where a wrong int32 sign extension shows up.

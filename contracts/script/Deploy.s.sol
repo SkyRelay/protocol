@@ -6,10 +6,11 @@ import {SkyRelayBeacon} from "../src/SkyRelayBeacon.sol";
 
 contract Deploy is Script {
     function run() external {
+        address owner = vm.envAddress("OWNER");
         address attester = vm.envAddress("ATTESTER");
         address vault = vm.envAddress("ORBITAL_VAULT");
         vm.startBroadcast();
-        new SkyRelayBeacon(attester, vault);
+        new SkyRelayBeacon(owner, attester, vault);
         vm.stopBroadcast();
     }
 }

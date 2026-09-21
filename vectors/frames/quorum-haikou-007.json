@@ -1,0 +1,46 @@
+{
+  "id": "quorum-haikou-007",
+  "capturedAt": "2026-09-20T15:30:03.210Z",
+  "source": "lan-grpc://192.168.100.1:9200",
+  "method": "SpaceX.API.Device.Device/Handle",
+  "notes": "Second station of a three-way quorum: a different terminal 210 km away sees the same STARLINK-1008 at the same second, from a different elevation and with a different Doppler shift.",
+  "station": {
+    "id": "MERIDIAN-04",
+    "latDeg": 20.04,
+    "lonDeg": 110.32,
+    "altKm": 0.015
+  },
+  "expectNoradId": 44714,
+  "dishGetStatus": {
+    "deviceInfo": {
+      "id": "ut01000000-00000000-00b4d21a",
+      "hardwareVersion": "rev4_panda_prod1",
+      "softwareVersion": "2026.07.06.mr81950"
+    },
+    "deviceState": {
+      "uptimeS": 903412
+    },
+    "state": "Connected",
+    "snr": 8.1,
+    "downlinkThroughputBps": 164200000,
+    "uplinkThroughputBps": 16700000,
+    "popPingLatencyMs": 41.2,
+    "popPingDropRate": 0.004,
+    "obstructionStats": {
+      "fractionObstructed": 0.0102
+    },
+    "boresightAzimuthDeg": 222.45,
+    "boresightElevationDeg": 33.531
+  },
+  "dishGetDiagnostics": {
+    "id": "ut01000000-00000000-00b4d21a",
+    "hardwareVersion": "rev4_panda_prod1",
+    "softwareVersion": "2026.07.06.mr81950",
+    "disablementCode": "OKAY"
+  },
+  "egress": {
+    "asn": 14593,
+    "asOrg": "SPACEX-STARLINK",
+    "prefix": "98.97.12.0/24"
+  }
+}

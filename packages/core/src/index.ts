@@ -9,7 +9,7 @@ export {
 } from "./crypto/eip712.ts";
 export type { SkyRelayAttestation, Eip712Domain } from "./crypto/eip712.ts";
 
-export { parseTle, parse3le } from "./orbit/tle.ts";
+export { parseTle, parse3le, catalogHash } from "./orbit/tle.ts";
 export type { Tle } from "./orbit/tle.ts";
 export { initSgp4, propagate, propagateTle } from "./orbit/sgp4.ts";
 export type { Sgp4Result, Sgp4State, Vec3 } from "./orbit/sgp4.ts";
@@ -40,6 +40,8 @@ export { stripPrivateFields } from "./telemetry/privacy.ts";
 
 export { runPipeline } from "./pipeline.ts";
 export type { PipelineInput, PipelineOutput } from "./pipeline.ts";
+export { runQuorum } from "./quorum.ts";
+export type { QuorumInput, QuorumMember, QuorumOutput } from "./quorum.ts";
 export {
   ALLOWED_ASN,
   STARLINK_ASN,
