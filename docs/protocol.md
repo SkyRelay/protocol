@@ -87,6 +87,33 @@ The numbers differ because the stations are hundreds of kilometres apart; they a
 
 It does **not** stop a single party who holds every key and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Anyone reading "quorum" as "unforgeable" is reading too much into it.
 
+## Pass tracks
+
+A quorum spreads one instant across several stations. A *track* spreads one station across a whole pass, and it constrains a different thing: not who signed, but whether the numbers move the way orbital mechanics says they must.
+
+`checkPassShape` requires, over a sequence of sightings from one station of one satellite:
+
+- timestamps strictly increasing;
+- Doppler **strictly falling** — range-rate rises monotonically from approach to recession, and \(f_d = -\dot\rho f_c / c\);
+- elevation rising to exactly one maximum, then falling;
+- every sample above the horizon and inside the LEO Ku envelope.
+
+These were checked against eight real passes covering three satellites, two stations and peak elevations from 6.5° to 74°; all eight satisfy them exactly.
+
+The committed track is `vectors/tracks/genesis-01-44714.json`: nine samples of STARLINK-1008 over GENESIS-01, 480 s apart end to end, peaking at 73.46°, Doppler 271 705 → −271 319 Hz through zero.
+
+### Why this one is worth more than it looks
+
+```ts
+type PassSample = { timestamp: number; elevationMilliDeg: number; dopplerHz: number };
+```
+
+That is precisely the content of the `StationReport` event. The shape check therefore needs **nothing that is not already public**: no captures, no element sets, no cooperation from the station. Anyone indexing the chain can rebuild a station's track and test it.
+
+That changes what forgery costs. A fabricated beacon must now sit inside a fabricated *stream*, the stream is visible to everyone, and the constraints linking its members are fixed by physics rather than by policy.
+
+It remains an **off-chain audit**. The contract accepts beacons one at a time and has no view of a track; nothing here makes the shape binding at submission. Treat it as something a verifier runs, not something the protocol enforces.
+
 ## On-chain verifier (`SkyRelayBeacon.sol`)
 
 One entry point takes a set; a single-attester deployment is the degenerate case where the set has one member, so there is one code path to audit rather than two.

@@ -14,6 +14,7 @@ These fixtures let `pnpm verify` and `forge test` reproduce the full pipeline **
 | `frames/quorum-anyuan-009.json` | Third member: the vessel at sea, 460 km out, on AS45700 |
 | `frames/bad-asn-005.json` | Negative: valid geometry, terrestrial egress AS15169 — the ASN gate must reject it |
 | `frames/bad-geometry-006.json` | Negative: Starlink ASN, boresight swung 25° off — the SGP4 match must reject it |
+| `tracks/genesis-01-44714.json` | One whole STARLINK-1008 pass over GENESIS-01, sampled every 60 s, for the pass-shape check |
 | `eip712/domain.json` | Canonical EIP-712 domain |
 | `eip712/attestations.json` | Generated. Attestation fields + the digest TypeScript computes for each positive frame, plus the three-station quorum grouping; `contracts/test/Eip712Vectors.t.sol` recomputes every digest with solc and re-checks that the quorum would satisfy the on-chain agreement rule |
 

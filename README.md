@@ -23,6 +23,7 @@ An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS
 - [Committing to the catalog](#committing-to-the-catalog)
 - [The attestation](#the-attestation)
 - [Quorum](#quorum)
+- [Pass tracks](#pass-tracks)
 - [The on-chain verifier](#the-on-chain-verifier)
 - [Governance](#governance)
 - [Running it against a real terminal](#running-it-against-a-real-terminal)
@@ -104,8 +105,11 @@ SkyRelay feasibility pipeline
        quorum-haikou-007    MERIDIAN-04  el= 33.36°  fd=  226851 Hz  ASN 14593
        quorum-anyuan-009    MV-ANYUAN    el= 25.88°  fd=  116911 Hz  ASN 45700
   ok   quorum rejects a member from another second
+  ok   pass track NORAD 44714: 9 samples over 480 s, peak 73.46°, Doppler 271705 → -271319 Hz through zero
+  ok   pass shape verifies from chain-visible fields alone
+  ok   forged Doppler rejected: Doppler must fall through a pass
 
-RESULT  positive=6  negative=2  quorum=3 stations  forge=pass
+RESULT  positive=6  negative=2  quorum=3 stations  track=9 samples  forge=pass
 ```
 
 Every number there is derived, not stored. The NORAD id is whichever satellite the boresight resolved to out of the whole catalog; the elevation and Doppler come out of SGP4 at the exact second the attestation commits to; the residual is how far the terminal's reported pointing sat from that satellite.
@@ -126,6 +130,7 @@ The point of this repository is that its claims are checkable against sources ou
 | EIP-712 digests | `solc` recomputes all six committed vectors from the same fields (`contracts/test/Eip712Vectors.t.sol`) | byte-identical |
 | Catalog commitment | One altered digit in one element set must move `catalogHash` | exact |
 | Quorum agreement | solc re-checks that the committed three-station set would satisfy `InconsistentQuorum` | pass |
+| Pass shape | Monotone Doppler, one elevation maximum, one zero crossing — verified across eight real passes, three satellites, peaks 6.5°–74° | holds on all |
 | Fixture reproducibility | CI regenerates `vectors/` and fails on any diff | no drift |
 
 The velocity row exists for a reason. An earlier revision carried a stray `xke` factor on `rdotl`/`rvdotl`: position was exact to the last digit and **every Doppler number was 13.4× too small**. A position-only check cannot see that, which is why velocity is pinned against an external source and cross-checked two more ways.
@@ -203,9 +208,32 @@ The three disagree on every number, and that is the point: they are hundreds of 
 
 It does **not** stop a single party who holds every key and is willing to run SGP4 — that party can fabricate *k* mutually consistent reports. Reading "quorum" as "unforgeable" is reading too much into it.
 
+## Pass tracks
+
+A single beacon is three numbers, and three numbers are cheap to invent. A *pass* is not.
+
+Orbital mechanics fixes the shape of a pass, and the shape is checkable without propagating anything:
+
+- range-rate rises monotonically from approach to recession, so the Doppler shift **falls strictly** and crosses zero at most once;
+- elevation rises to **exactly one** maximum and then falls.
+
+`checkPassShape` verifies both. The committed track is one STARLINK-1008 pass over Sanya, nine samples across 480 s, peaking at 73.46° with Doppler running 271 705 → −271 319 Hz straight through zero.
+
+What makes this worth having is the input it needs:
+
+```ts
+type PassSample = { timestamp: number; elevationMilliDeg: number; dopplerHz: number };
+```
+
+Those are exactly the fields the `StationReport` event puts on chain. **Anyone indexing BSC can rebuild a station's track from public logs and check it — no captures, no element sets, nobody to trust.** Forging one beacon is no longer enough; the stream has to be coherent, and the stream is public.
+
+The invariants were checked against eight real passes spanning three satellites, two stations and peak elevations from 6.5° to 74°. Seven negative tests cover what a forger would produce: Doppler that stops falling, a second elevation peak, a dip on the way up, samples out of order, a sample below the horizon, an impossible shift, and a track that wanders onto another satellite.
+
+This is **not** part of what the contract verifies, and it cannot be — the contract sees one beacon at a time. It is what an auditor runs afterwards over what a station has published.
+
 ## The on-chain verifier
 
-`contracts/src/SkyRelayBeacon.sol`, 399 lines, no OpenZeppelin, no proxy.
+`contracts/src/SkyRelayBeacon.sol`, 406 lines, no OpenZeppelin, no proxy.
 
 ```solidity
 function verifyAndRecord(SkyRelayAttestation[] calldata atts, bytes[] calldata sigs)
@@ -312,11 +340,11 @@ Starlink beam reassignment is globally aligned to UTC seconds **12 / 27 / 42 / 5
 
 ## Repository map
 
-About 2 550 lines of source, no runtime dependencies.
+About 2 750 lines of source, no runtime dependencies.
 
 | Path | Lines | What it does |
 |---|---|---|
-| `contracts/src/SkyRelayBeacon.sol` | 399 | Quorum verifier, attester registry, timelocked governance |
+| `contracts/src/SkyRelayBeacon.sol` | 406 | Quorum verifier, attester registry, timelocked governance |
 | `packages/core/src/orbit/sgp4.ts` | 327 | Near-earth SGP4 initialiser and propagator, TEME output |
 | `packages/core/src/orbit/coords.ts` | 157 | Julian date, GMST, TEME→ECEF (position and velocity), ellipsoidal station, look angles |
 | `packages/core/src/orbit/tle.ts` | 150 | 69-column TLE parsing with checksum validation, catalog commitment |
@@ -324,6 +352,7 @@ About 2 550 lines of source, no runtime dependencies.
 | `packages/core/src/crypto/keccak.ts` | 127 | Keccak-f[1600] with Ethereum `0x01` padding |
 | `packages/core/src/telemetry/parse.ts` | 123 | Local Device API JSON, camelCase and snake_case |
 | `packages/core/src/quorum.ts` | 104 | Multi-station agreement on one sighting |
+| `packages/core/src/track.ts` | 170 | Pass-shape invariants, checkable from chain data alone |
 | `packages/core/src/telemetry/features.ts` | 86 | Integer feature vector, handover slot, telemetry hash |
 | `packages/core/src/pipeline.ts` | 85 | The four steps, end to end |
 | `packages/core/src/crypto/abi.ts` | 83 | Static-type ABI words, including int32 sign extension |
@@ -332,12 +361,12 @@ About 2 550 lines of source, no runtime dependencies.
 | `packages/core/src/telemetry/privacy.ts` | 34 | GPS removal, terminal id hashing |
 | `packages/core/src/telemetry/asn.ts` | 27 | AS14593 / AS45700 allow-set |
 | `packages/core/src/orbit/doppler.ts` | 17 | Classical one-way shift |
-| `scripts/build-vectors.ts` | 364 | Regenerates fixtures and digest vectors from real passes |
-| `scripts/verify-pipeline.ts` | 182 | `pnpm verify` |
+| `scripts/build-vectors.ts` | 441 | Regenerates fixtures and digest vectors from real passes |
+| `scripts/verify-pipeline.ts` | 230 | `pnpm verify` |
 
 ## Tests
 
-**45 TypeScript** (`node:test`) and **41 Solidity** (Foundry, across three suites, including fuzz).
+**56 TypeScript** (`node:test`) and **42 Solidity** (Foundry, across three suites, including fuzz).
 
 The ones that carry weight:
 
@@ -351,6 +380,9 @@ The ones that carry weight:
 | `one altered digit in one element set changes the hash` | a catalog commitment that does not actually commit |
 | `pipeline rejects a boresight no catalog satellite explains` | the geometry gate silently degrading |
 | `stations at different places report different geometry` | a "quorum" that is really one measurement copied k times |
+| `a track whose Doppler stops falling is rejected` | a forged beacon stream that is individually plausible but not a pass |
+| `a track with two elevation peaks is rejected` | the same, on the elevation axis |
+| `test_quorumCannotBeSetAboveTheMaximumSetSize` | governance bricking beacon submission by demanding a set larger than the contract accepts |
 | `committed digest vectors match what the pipeline produces today` | stale cross-implementation vectors |
 | `test_solidityReproducesEveryTypescriptDigest` | TypeScript and solc disagreeing on the encoding |
 | `test_everyFieldIsCommitted` | an encoder that silently drops a struct member |
@@ -382,13 +414,13 @@ The ones that carry weight:
 Listed in the order that would actually move the trust model, not the order that is easiest:
 
 1. **Externally verifiable independence between attesters.** The mechanism for a quorum now exists; what does not exist is any reason for an observer to believe the k keys are k people. Stake, identity attestations or geographic proofs would each be a different answer, and none is implemented.
-2. **Per-pass Doppler tracking.** A time series of Doppler across a whole pass has a shape fixed by orbital mechanics. Matching that shape is far harder to fake than matching one instant, and unlike the quorum it is a *measurement* property rather than a key-management one.
+2. **On-chain pass aggregation.** `checkPassShape` is auditable off chain today, but the contract still accepts each beacon in isolation. A verifier that scored a station on the coherence of its whole track would make the shape constraint binding rather than advisory.
 3. **Bounded replay storage.** `usedDigest` is permanent but only load-bearing for 120 s; a time-bucketed structure would let old entries be pruned.
 4. **Feature migration off `snr`.** Whatever current firmware still populates.
 
-Items 1 and 2 are the ones that would change the honest description of this project. They are not implemented, and the repository does not claim otherwise.
+Item 1 is the one that would change the honest description of this project, and it is not implemented.
 
-Already landed since the first release: the catalog commitment (was item 2) and the quorum mechanism (was item 1, in the mechanical half only — see the caveat above).
+Landed since the first release: the catalog commitment, the quorum mechanism (the mechanical half only — see the caveat above), and pass-shape verification.
 
 ## FAQ
 
