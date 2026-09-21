@@ -41,6 +41,8 @@ export { stripPrivateFields } from "./telemetry/privacy.ts";
 export { runPipeline } from "./pipeline.ts";
 export type { PipelineInput, PipelineOutput } from "./pipeline.ts";
 export { runQuorum } from "./quorum.ts";
+export { checkPassShape, runPassTrack } from "./track.ts";
+export type { PassSample, PassShape, PassTrackInput, PassTrackOutput } from "./track.ts";
 export type { QuorumInput, QuorumMember, QuorumOutput } from "./quorum.ts";
 export {
   ALLOWED_ASN,

@@ -1,0 +1,364 @@
+{
+  "id": "genesis-01-44714",
+  "notes": "One pass of STARLINK-1008 over GENESIS-01, sampled every 60 s. Used to check that a sequence of beacons forms a physically coherent pass, not just a bag of individually plausible instants.",
+  "station": {
+    "id": "GENESIS-01",
+    "latDeg": 18.23,
+    "lonDeg": 109.51,
+    "altKm": 0.05
+  },
+  "expectNoradId": 44714,
+  "frames": [
+    {
+      "id": "track-00",
+      "capturedAt": "2026-09-20T15:26:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26000
+        },
+        "state": "Connected",
+        "snr": 3.471,
+        "downlinkThroughputBps": 33247330,
+        "uplinkThroughputBps": 3324733,
+        "popPingLatencyMs": 76.909,
+        "popPingDropRate": 0.083,
+        "obstructionStats": {
+          "fractionObstructed": 0.019
+        },
+        "boresightAzimuthDeg": 219.843,
+        "boresightElevationDeg": 4.171
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-01",
+      "capturedAt": "2026-09-20T15:27:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26060
+        },
+        "state": "Connected",
+        "snr": 4.094,
+        "downlinkThroughputBps": 50770987,
+        "uplinkThroughputBps": 5077099,
+        "popPingLatencyMs": 72.82,
+        "popPingDropRate": 0.075,
+        "obstructionStats": {
+          "fractionObstructed": 0.017
+        },
+        "boresightAzimuthDeg": 221.001,
+        "boresightElevationDeg": 9.808
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-02",
+      "capturedAt": "2026-09-20T15:28:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26120
+        },
+        "state": "Connected",
+        "snr": 5.044,
+        "downlinkThroughputBps": 77495063,
+        "uplinkThroughputBps": 7749506,
+        "popPingLatencyMs": 66.584,
+        "popPingDropRate": 0.061,
+        "obstructionStats": {
+          "fractionObstructed": 0.014
+        },
+        "boresightAzimuthDeg": 223.234,
+        "boresightElevationDeg": 18.608
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-03",
+      "capturedAt": "2026-09-20T15:29:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26180
+        },
+        "state": "Connected",
+        "snr": 6.795,
+        "downlinkThroughputBps": 126746428,
+        "uplinkThroughputBps": 12674643,
+        "popPingLatencyMs": 55.093,
+        "popPingDropRate": 0.037,
+        "obstructionStats": {
+          "fractionObstructed": 0.008
+        },
+        "boresightAzimuthDeg": 229.453,
+        "boresightElevationDeg": 36.368
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-04",
+      "capturedAt": "2026-09-20T15:30:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26240
+        },
+        "state": "Connected",
+        "snr": 9.135,
+        "downlinkThroughputBps": 192551447,
+        "uplinkThroughputBps": 19255145,
+        "popPingLatencyMs": 39.738,
+        "popPingDropRate": 0.004,
+        "obstructionStats": {
+          "fractionObstructed": 0.001
+        },
+        "boresightAzimuthDeg": 292.967,
+        "boresightElevationDeg": 73.47
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-05",
+      "capturedAt": "2026-09-20T15:31:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26300
+        },
+        "state": "Connected",
+        "snr": 7.093,
+        "downlinkThroughputBps": 135107545,
+        "uplinkThroughputBps": 13510754,
+        "popPingLatencyMs": 53.142,
+        "popPingDropRate": 0.032,
+        "obstructionStats": {
+          "fractionObstructed": 0.007
+        },
+        "boresightAzimuthDeg": 22.398,
+        "boresightElevationDeg": 39.779
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-06",
+      "capturedAt": "2026-09-20T15:32:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26360
+        },
+        "state": "Connected",
+        "snr": 5.198,
+        "downlinkThroughputBps": 81809439,
+        "uplinkThroughputBps": 8180944,
+        "popPingLatencyMs": 65.578,
+        "popPingDropRate": 0.059,
+        "obstructionStats": {
+          "fractionObstructed": 0.013
+        },
+        "boresightAzimuthDeg": 29.786,
+        "boresightElevationDeg": 20.123
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-07",
+      "capturedAt": "2026-09-20T15:33:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26420
+        },
+        "state": "Connected",
+        "snr": 4.187,
+        "downlinkThroughputBps": 53391781,
+        "uplinkThroughputBps": 5339178,
+        "popPingLatencyMs": 72.209,
+        "popPingDropRate": 0.073,
+        "obstructionStats": {
+          "fractionObstructed": 0.016
+        },
+        "boresightAzimuthDeg": 32.284,
+        "boresightElevationDeg": 10.746
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    },
+    {
+      "id": "track-08",
+      "capturedAt": "2026-09-20T15:34:41.000Z",
+      "source": "lan-grpc://192.168.100.1:9200",
+      "method": "SpaceX.API.Device.Device/Handle",
+      "station": {
+        "id": "GENESIS-01",
+        "latDeg": 18.23,
+        "lonDeg": 109.51,
+        "altKm": 0.05
+      },
+      "expectNoradId": 44714,
+      "dishGetStatus": {
+        "deviceInfo": {
+          "id": "ut01000000-00000000-00e1c9f7",
+          "hardwareVersion": "rev4_panda_prod1",
+          "softwareVersion": "2026.07.06.mr81950"
+        },
+        "deviceState": {
+          "uptimeS": 26480
+        },
+        "state": "Connected",
+        "snr": 3.538,
+        "downlinkThroughputBps": 35139349,
+        "uplinkThroughputBps": 3513935,
+        "popPingLatencyMs": 76.467,
+        "popPingDropRate": 0.082,
+        "obstructionStats": {
+          "fractionObstructed": 0.018
+        },
+        "boresightAzimuthDeg": 33.581,
+        "boresightElevationDeg": 4.895
+      },
+      "egress": {
+        "asn": 14593,
+        "asOrg": "SPACEX-STARLINK",
+        "prefix": "98.97.12.0/24"
+      }
+    }
+  ]
+}

@@ -19,6 +19,7 @@ import { parse3le } from "../packages/core/src/orbit/tle.ts";
 import { observe, type Station } from "../packages/core/src/orbit/pass.ts";
 import { runPipeline } from "../packages/core/src/pipeline.ts";
 import { runQuorum } from "../packages/core/src/quorum.ts";
+import { runPassTrack } from "../packages/core/src/track.ts";
 import { operatorFor, readCatalog, readDomain } from "./shared.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -360,5 +361,81 @@ for (const r of q.reports) {
   console.log(
     `        ${r.capture.source.padEnd(30)} el=${(r.attestation.elevationMilliDeg / 1000).toFixed(2).padStart(6)}\u00b0  ` +
       `fd=${String(r.attestation.dopplerHz).padStart(8)} Hz  ASN ${r.attestation.asn}`,
+  );
+}
+
+/**
+ * A whole pass from one station, sampled every 60 s. One beacon is three
+ * numbers and three numbers are cheap to invent; a pass has a shape that
+ * orbital mechanics fixes, and `checkPassShape` verifies that shape from the
+ * three fields the chain publishes, with no element sets involved.
+ */
+const TRACK_PEAK = Date.UTC(2026, 8, 20, 15, 30, 41);
+const TRACK_OFFSETS = [-240, -180, -120, -60, 0, 60, 120, 180, 240];
+{
+  const tle = parse3le(readFileSync(join(root, "vectors/tle/starlink-1008.txt"), "utf8"));
+  const frames = TRACK_OFFSETS.map((offset, i) => {
+    const at = new Date(TRACK_PEAK + offset * 1000);
+    const look = observe(tle, GENESIS_01, at);
+    if (look.elevationDeg <= 0) {
+      throw new Error(`track sample ${offset}s is below the horizon`);
+    }
+    // Link quality tracks elevation: low passes see more atmosphere and more
+    // of the terminal's own horizon clutter.
+    const quality = Math.sin((look.elevationDeg * Math.PI) / 180);
+    return {
+      id: `track-${String(i).padStart(2, "0")}`,
+      capturedAt: at.toISOString(),
+      source: "lan-grpc://192.168.100.1:9200",
+      method: "SpaceX.API.Device.Device/Handle",
+      station: {
+        id: GENESIS_01.id,
+        latDeg: GENESIS_01.latDeg,
+        lonDeg: GENESIS_01.lonDeg,
+        altKm: GENESIS_01.altKm,
+      },
+      expectNoradId: tle.noradId,
+      dishGetStatus: {
+        deviceInfo: UT,
+        deviceState: { uptimeS: 26000 + i * 60 },
+        state: "Connected",
+        snr: round3(3 + 6.4 * quality),
+        downlinkThroughputBps: Math.round(20e6 + 180e6 * quality),
+        uplinkThroughputBps: Math.round(2e6 + 18e6 * quality),
+        popPingLatencyMs: round3(80 - 42 * quality),
+        popPingDropRate: round3(0.09 * (1 - quality)),
+        obstructionStats: { fractionObstructed: round3(0.02 * (1 - quality)) },
+        boresightAzimuthDeg: round3(look.azimuthDeg + 0.07 - 0.02 * i),
+        boresightElevationDeg: round3(look.elevationDeg - 0.05 + 0.015 * i),
+      },
+      egress: { asn: 14593, asOrg: "SPACEX-STARLINK", prefix: "98.97.12.0/24" },
+    };
+  });
+
+  const track = {
+    id: "genesis-01-44714",
+    notes:
+      "One pass of STARLINK-1008 over GENESIS-01, sampled every 60 s. Used to check that a sequence of beacons forms a physically coherent pass, not just a bag of individually plausible instants.",
+    station: frames[0]!.station,
+    expectNoradId: tle.noradId,
+    frames,
+  };
+  writeFileSync(
+    join(root, "vectors/tracks", `${track.id}.json`),
+    `${JSON.stringify(track, null, 2)}\n`,
+  );
+
+  const t = runPassTrack({
+    captures: frames,
+    station: GENESIS_01,
+    catalog,
+    domain,
+    operator: operatorFor(GENESIS_01.id),
+  });
+  console.log(
+    `\nvectors/tracks/${track.id}.json  NORAD ${t.noradId}  ${t.shape.sampleCount} samples over ` +
+      `${t.shape.durationSec} s  peak ${(t.shape.peakElevationMilliDeg / 1000).toFixed(2)}\u00b0  ` +
+      `Doppler ${t.shape.maxDopplerHz} \u2192 ${t.shape.minDopplerHz} Hz` +
+      `${t.shape.crossesZeroDoppler ? " (crosses zero)" : ""}`,
   );
 }

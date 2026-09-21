@@ -16,6 +16,7 @@ import type { Station } from "../packages/core/src/orbit/pass.ts";
 import { runPipeline } from "../packages/core/src/pipeline.ts";
 import { ATTESTATION_TYPEHASH, DOMAIN_TYPEHASH } from "../packages/core/src/crypto/eip712.ts";
 import { runQuorum } from "../packages/core/src/quorum.ts";
+import { checkPassShape, runPassTrack } from "../packages/core/src/track.ts";
 import { operatorFor, readCatalog, readDomain } from "./shared.ts";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -162,6 +163,53 @@ if (rejected < Object.keys(EXPECTED_REJECTION).length) fail("not every negative 
   }
 }
 
+// --- pass track: one station, one satellite, the whole pass ---
+{
+  const track = JSON.parse(
+    readFileSync(join(root, "vectors/tracks/genesis-01-44714.json"), "utf8"),
+  );
+  const t = runPassTrack({
+    captures: track.frames,
+    station: track.station as Station,
+    catalog,
+    domain,
+    operator: operatorFor((track.station as Station).id),
+  });
+  if (t.noradId !== track.expectNoradId) {
+    fail(`track followed NORAD ${t.noradId}, expected ${track.expectNoradId}`);
+  }
+  ok(
+    `pass track NORAD ${t.noradId}: ${t.shape.sampleCount} samples over ${t.shape.durationSec} s, ` +
+      `peak ${(t.shape.peakElevationMilliDeg / 1000).toFixed(2)}\u00b0, Doppler ` +
+      `${t.shape.maxDopplerHz} \u2192 ${t.shape.minDopplerHz} Hz` +
+      `${t.shape.crossesZeroDoppler ? " through zero" : ""}`,
+  );
+
+  // The shape must be checkable from the fields StationReport publishes, with
+  // no captures and no element sets, or third-party auditing is impossible.
+  const onChain = t.reports.map((r) => ({
+    timestamp: r.attestation.timestamp,
+    elevationMilliDeg: r.attestation.elevationMilliDeg,
+    dopplerHz: r.attestation.dopplerHz,
+  }));
+  checkPassShape(onChain);
+  ok("pass shape verifies from chain-visible fields alone");
+
+  // and a forged sample must not survive it
+  const tampered = onChain.map((x) => ({ ...x }));
+  tampered[5]!.dopplerHz = tampered[4]!.dopplerHz + 1000;
+  try {
+    checkPassShape(tampered);
+    fail("a track whose Doppler stops falling was accepted");
+  } catch (e) {
+    const message = (e as Error).message;
+    if (!/Doppler must fall through a pass/.test(message)) {
+      fail(`track rejected for the wrong reason: ${message}`);
+    }
+    ok(`forged Doppler rejected: ${message}`);
+  }
+}
+
 console.log("\nUnit tests");
 execSync("pnpm test", { cwd: root, stdio: "inherit" });
 
@@ -176,7 +224,7 @@ try {
 }
 
 console.log(`
-RESULT  positive=${passed}  negative=${rejected}  quorum=3 stations  forge=pass
+RESULT  positive=${passed}  negative=${rejected}  quorum=3 stations  track=9 samples  forge=pass
         pipeline closed: gRPC JSON → ASN filter → SGP4 boresight match → catalog commitment
                        → EIP-712 → BSC quorum verifier
 `);
