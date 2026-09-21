@@ -1,0 +1,40 @@
+{
+  "id": "bad-asn-005",
+  "capturedAt": "2026-09-20T15:30:03.210Z",
+  "source": "lan-grpc://192.168.100.1:9200",
+  "method": "SpaceX.API.Device.Device/Handle",
+  "notes": "Negative: geometry is valid but the egress is terrestrial broadband (AS15169). The ASN allow-set must reject it.",
+  "station": {
+    "id": "GENESIS-01",
+    "latDeg": 18.23,
+    "lonDeg": 109.51,
+    "altKm": 0.05
+  },
+  "expectNoradId": 44714,
+  "dishGetStatus": {
+    "deviceInfo": {
+      "id": "ut01000000-00000000-00e1c9f7",
+      "hardwareVersion": "rev4_panda_prod1",
+      "softwareVersion": "2026.07.06.mr81950"
+    },
+    "deviceState": {
+      "uptimeS": 26115
+    },
+    "state": "Connected",
+    "snr": 8.7,
+    "downlinkThroughputBps": 186400000,
+    "uplinkThroughputBps": 18400000,
+    "popPingLatencyMs": 38.857143,
+    "popPingDropRate": 0.002,
+    "obstructionStats": {
+      "fractionObstructed": 0.0064355433
+    },
+    "boresightAzimuthDeg": 236.027,
+    "boresightElevationDeg": 48.303
+  },
+  "egress": {
+    "asn": 15169,
+    "asOrg": "GOOGLE",
+    "prefix": "8.8.8.0/24"
+  }
+}

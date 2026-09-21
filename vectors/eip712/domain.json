@@ -1,0 +1,7 @@
+{
+  "name": "SkyRelay",
+  "version": "1",
+  "chainId": 97,
+  "verifyingContract": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
+  "comment": "Chapel-shaped domain used by TS/Solidity digest compatibility tests. Production domain uses address(this) and block.chainid."
+}

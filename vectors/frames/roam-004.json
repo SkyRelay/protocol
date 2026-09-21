@@ -1,0 +1,46 @@
+{
+  "id": "roam-004",
+  "capturedAt": "2026-09-20T18:53:42.500Z",
+  "source": "lan-grpc://192.168.100.1:9200",
+  "method": "SpaceX.API.Device.Device/Handle",
+  "notes": "Maritime roam on AS45700 from a vessel in the South China Sea, tracking STARLINK-2034. Larger pointing residual from deck motion.",
+  "station": {
+    "id": "MV-ANYUAN",
+    "latDeg": 15.8,
+    "lonDeg": 113.2,
+    "altKm": 0.012
+  },
+  "expectNoradId": 47352,
+  "dishGetStatus": {
+    "deviceInfo": {
+      "id": "ut01000000-00000000-00e1c9f7",
+      "hardwareVersion": "rev3_proto2",
+      "softwareVersion": "2026.07.06.mr81950"
+    },
+    "deviceState": {
+      "uptimeS": 401233
+    },
+    "state": "Connected",
+    "snr": 9.2,
+    "downlinkThroughputBps": 142700000,
+    "uplinkThroughputBps": 14100000,
+    "popPingLatencyMs": 44.2,
+    "popPingDropRate": 0.007,
+    "obstructionStats": {
+      "fractionObstructed": 0.0011
+    },
+    "boresightAzimuthDeg": 284.23,
+    "boresightElevationDeg": 39.681
+  },
+  "dishGetDiagnostics": {
+    "id": "ut01000000-00000000-00e1c9f7",
+    "hardwareVersion": "rev3_proto2",
+    "softwareVersion": "2026.07.06.mr81950",
+    "disablementCode": "OKAY"
+  },
+  "egress": {
+    "asn": 45700,
+    "asOrg": "IDNIC-STARLINK-AS-ID",
+    "prefix": "103.152.0.0/22"
+  }
+}

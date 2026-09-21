@@ -1,0 +1,40 @@
+{
+  "id": "bad-geometry-006",
+  "capturedAt": "2026-09-20T15:30:03.210Z",
+  "source": "lan-grpc://192.168.100.1:9200",
+  "method": "SpaceX.API.Device.Device/Handle",
+  "notes": "Negative: Starlink ASN and a plausible-looking dish payload, but the boresight is swung 25 deg away from any satellite in the catalog. The SGP4 match must reject it.",
+  "station": {
+    "id": "GENESIS-01",
+    "latDeg": 18.23,
+    "lonDeg": 109.51,
+    "altKm": 0.05
+  },
+  "expectNoradId": 44714,
+  "dishGetStatus": {
+    "deviceInfo": {
+      "id": "ut01000000-00000000-00e1c9f7",
+      "hardwareVersion": "rev4_panda_prod1",
+      "softwareVersion": "2026.07.06.mr81950"
+    },
+    "deviceState": {
+      "uptimeS": 26115
+    },
+    "state": "Connected",
+    "snr": 8.7,
+    "downlinkThroughputBps": 186400000,
+    "uplinkThroughputBps": 18400000,
+    "popPingLatencyMs": 38.857143,
+    "popPingDropRate": 0.002,
+    "obstructionStats": {
+      "fractionObstructed": 0.0064355433
+    },
+    "boresightAzimuthDeg": 261.027,
+    "boresightElevationDeg": 48.303
+  },
+  "egress": {
+    "asn": 14593,
+    "asOrg": "SPACEX-STARLINK",
+    "prefix": "98.97.12.0/24"
+  }
+}

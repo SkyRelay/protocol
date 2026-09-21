@@ -1,0 +1,46 @@
+{
+  "id": "handover-002",
+  "capturedAt": "2026-09-20T15:30:12.040Z",
+  "source": "lan-grpc://192.168.100.1:9200",
+  "method": "SpaceX.API.Device.Device/Handle",
+  "notes": "Same terminal 8.83 s later, captured 40 ms after the globally aligned :12 beam reassignment. SNR and throughput step as the terminal retargets.",
+  "station": {
+    "id": "GENESIS-01",
+    "latDeg": 18.23,
+    "lonDeg": 109.51,
+    "altKm": 0.05
+  },
+  "expectNoradId": 44714,
+  "dishGetStatus": {
+    "deviceInfo": {
+      "id": "ut01000000-00000000-00e1c9f7",
+      "hardwareVersion": "rev4_panda_prod1",
+      "softwareVersion": "2026.07.06.mr81950"
+    },
+    "deviceState": {
+      "uptimeS": 26124
+    },
+    "state": "Connected",
+    "snr": 7.4,
+    "downlinkThroughputBps": 95800000,
+    "uplinkThroughputBps": 9200000,
+    "popPingLatencyMs": 52.1,
+    "popPingDropRate": 0.041,
+    "obstructionStats": {
+      "fractionObstructed": 0.0065
+    },
+    "boresightAzimuthDeg": 240.558,
+    "boresightElevationDeg": 54.406
+  },
+  "dishGetDiagnostics": {
+    "id": "ut01000000-00000000-00e1c9f7",
+    "hardwareVersion": "rev4_panda_prod1",
+    "softwareVersion": "2026.07.06.mr81950",
+    "disablementCode": "OKAY"
+  },
+  "egress": {
+    "asn": 14593,
+    "asOrg": "SPACEX-STARLINK",
+    "prefix": "98.97.12.0/24"
+  }
+}

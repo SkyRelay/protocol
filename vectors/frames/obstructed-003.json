@@ -1,0 +1,46 @@
+{
+  "id": "obstructed-003",
+  "capturedAt": "2026-09-20T14:06:27.880Z",
+  "source": "lan-grpc://192.168.100.1:9200",
+  "method": "SpaceX.API.Device.Device/Handle",
+  "notes": "Low elevation on STARLINK-1526 with a partially obstructed sky: SNR 3.1 dB, larger pointing residual, throughput collapsed.",
+  "station": {
+    "id": "GENESIS-01",
+    "latDeg": 18.23,
+    "lonDeg": 109.51,
+    "altKm": 0.05
+  },
+  "expectNoradId": 46029,
+  "dishGetStatus": {
+    "deviceInfo": {
+      "id": "ut01000000-00000000-00e1c9f7",
+      "hardwareVersion": "rev4_panda_prod1",
+      "softwareVersion": "2026.07.06.mr81950"
+    },
+    "deviceState": {
+      "uptimeS": 26680
+    },
+    "state": "Connected",
+    "snr": 3.1,
+    "downlinkThroughputBps": 12300000,
+    "uplinkThroughputBps": 1900000,
+    "popPingLatencyMs": 91.4,
+    "popPingDropRate": 0.178,
+    "obstructionStats": {
+      "fractionObstructed": 0.0913
+    },
+    "boresightAzimuthDeg": 13.261,
+    "boresightElevationDeg": 19.085
+  },
+  "dishGetDiagnostics": {
+    "id": "ut01000000-00000000-00e1c9f7",
+    "hardwareVersion": "rev4_panda_prod1",
+    "softwareVersion": "2026.07.06.mr81950",
+    "disablementCode": "OKAY"
+  },
+  "egress": {
+    "asn": 14593,
+    "asOrg": "SPACEX-STARLINK",
+    "prefix": "98.97.12.0/24"
+  }
+}
