@@ -72,6 +72,25 @@ export {
   calculateTargetCommitRound,
 } from "./entropy/extractor.ts";
 export type { PhysicalEntropyInputs } from "./entropy/extractor.ts";
+
+export {
+  kinematicTimeDilation,
+  gravitationalTimeDilation,
+  netRelativisticDilation,
+  tcaDopplerRateHzS,
+  createRelativisticTimeAnchor,
+} from "./orbit/relativity.ts";
+export type { RelativisticTimeAnchor } from "./orbit/relativity.ts";
+
+export {
+  computeEquivocationPairKey,
+  evaluateEquivocation,
+  formatSlashEquivocationCall,
+} from "./crypto/slashing.ts";
+export type { EquivocationProof } from "./crypto/slashing.ts";
+
+export { AutonomousAIGateway } from "./ai/gateway.ts";
+export type { AISpaceQuery, AISpaceState } from "./ai/gateway.ts";
 export {
   ALLOWED_ASN,
   STARLINK_ASN,
