@@ -1,36 +1,51 @@
-# SkyRelay Protocol v0.3.0 新功能开发者与用户指南
+# SkyRelay Protocol v0.3.0 Developer & Operator Guide
 
-本指南详细介绍在 Commit `e1e8298` 中合入的三个核心功能的使用方法、工作原理与集成代码：
-1. **相对论多普勒时间锚 (Relativistic Doppler Time Anchor)**
-2. **链上双签作恶罚没猎人 (On-Chain Equivocation Slashing & Bounty)**
-3. **自主 AI 空间网关 (Autonomous AI Space Invariant Gateway)**
+This handbook provides an end-to-end integration and operational guide for the breakthrough capabilities shipped in Commit `e1e8298`:
+
+1. **Relativistic Doppler Time Anchor** (Anti-MEV physical timekeeping)
+2. **On-Chain Equivocation Slashing Witness** (Fraud proofs & BNB bounty hunting)
+3. **Autonomous AI Space Gateway** (Physical orbital telemetry & cosmic entropy for on-chain AI agents)
 
 ---
 
-## 一、安装与环境准备
+## 1. Quickstart & Installation
 
-在项目根目录或您的 Node.js / TypeScript 项目中引入 `@skyrelay/core`：
+Install the protocol core package and web3 dependencies:
 
 ```bash
-# 使用 pnpm
+# Using pnpm
 pnpm add @skyrelay/core ethers
 
-# 或使用 npm / yarn
+# Or using npm / yarn
 npm install @skyrelay/core ethers
 ```
 
-支持 Node.js 22+ 及 ESM 模块规范。
+Requires Node.js 22+ (or modern browser ESM runtime).
 
 ---
 
-## 二、功能 1：相对论多普勒时间锚 (Anti-MEV 物理时间基准)
+## 2. Relativistic Doppler Time Anchor (Anti-MEV)
 
-### 1. 解决的痛点
-在传统的区块链交互中，节点依赖本机 NTP 时间或区块时间戳（Block Timestamp），极易被验证节点或 MEV 搜索者微调几个区块秒数进行时间抢跑（Time Bandit Attack）。
+### 2.1 The Problem It Solves
+Traditional blockchains and DeFi smart contracts rely on validator-reported `block.timestamp` or web2 NTP time servers. Both are vulnerable to:
+- **Time-bandit MEV**: Miners and validators manipulating timestamps by a few seconds to front-run or back-run liquidation orders.
+- **NTP Spoofing**: Attackers poisoning centralized time servers to desynchronize consensus nodes.
 
-星链卫星在 550 公里近地轨道（LEO）以 7.56 km/s 高速飞越，根据狭义与广义相对论，其星载原子钟每 24 小时产生约 **-22.7 微秒** 的净相对论时间漂移（动钟变慢主导），并且过顶时刻的多普勒斜率达到 **-4,050 Hz/s**。这一物理特征无法被任何地面黑客伪造。
+### 2.2 The Physics & Mathematical Invariant
+Starlink satellites orbit in Low-Earth Orbit (LEO) at ~550 km altitude with a linear speed of $v \approx 7.56\text{ km/s}$. Under Einstein's theories of relativity:
+- **Special Relativity (Kinematic Dilation)**: Moving clocks tick slower:
+  $$\Delta t_{\text{kin}} = -\frac{1}{2}\left(\frac{v}{c}\right)^2 \approx -27.5\ \mu\text{s/day}$$
+- **General Relativity (Gravitational Dilation)**: Clocks higher in Earth's gravitational potential tick faster:
+  $$\Delta t_{\text{grav}} = +\frac{\Delta \Phi}{c^2} \approx +4.8\ \mu\text{s/day}$$
+- **Net Relativistic Drift**: 
+  $$\Delta t_{\text{net}} \approx -22.7\ \mu\text{s/day}$$
 
-### 2. 代码调用示例
+At the Time of Closest Approach (TCA / zero-crossing), the Doppler inflection slope is uniquely defined by orbital mechanics:
+$$\left.\frac{df}{dt}\right|_{\text{TCA}} = -\frac{f_0 \cdot v^2}{c \cdot R_0} \approx -4,050\text{ Hz/s}$$
+
+This physical property **cannot be spoofed** by ground-based networks or software emulators.
+
+### 2.3 Integration Code Example
 
 ```typescript
 import {
@@ -40,49 +55,47 @@ import {
   KU_DOWNLINK_HZ,
 } from "@skyrelay/core";
 
-// 1. 计算相对论漂移参数
-const orbitalVelocityKmS = 7.56; // 轨道速度 7.56 km/s
-const altitudeKm = 550.0;        // 轨道高度 550 km
+// 1. Calculate relativistic clock parameters for Starlink LEO orbit
+const orbitalVelocityKmS = 7.56; // 7.56 km/s
+const altitudeKm = 550.0;        // 550 km altitude
 
 const dilation = netRelativisticDilation(orbitalVelocityKmS, altitudeKm);
-console.log(`净相对论日漂移: ${dilation.netMicrosecondsPerDay.toFixed(2)} μs/day`);
-// 输出: -22.73 μs/day (动钟变慢 -27.5 μs 抵消引力加速 +4.8 μs)
+console.log(`Net relativistic drift: ${dilation.netMicrosecondsPerDay.toFixed(2)} μs/day`);
+// Output: -22.73 μs/day (Kinematic slowing dominates gravitational advance)
 
-// 2. 计算过顶多普勒斜率 (过零点变化率)
+// 2. Compute the physical Doppler inflection rate at zero-crossing (TCA)
 const slope = tcaDopplerRateHzS(orbitalVelocityKmS, altitudeKm, KU_DOWNLINK_HZ);
-console.log(`TCA 多普勒拐点斜率: ${slope.toFixed(1)} Hz/s`);
-// 输出: 约 -4050.0 Hz/s
+console.log(`TCA Doppler slope: ${slope.toFixed(1)} Hz/s`);
+// Output: ~ -4050.0 Hz/s
 
-// 3. 生成物理防伪时间锚 (Time Anchor)
+// 3. Construct a verifiable Relativistic Time Anchor
 const anchor = createRelativisticTimeAnchor({
-  noradId: 47352,             // 卫星编号 (STARLINK-1008)
-  timestampSec: 1789934703,   // 观测时戳
-  elevationDeg: 65.2,         // 仰角
-  rangeKm: 620.0,             // 斜距
-  rangeRateKmS: 0.12,         // 距离变化率
-  dopplerHz: -4680,           // 实测多普勒频移
+  noradId: 47352,             // STARLINK-1008
+  timestampSec: 1789934703,   // Attestation second
+  elevationDeg: 65.2,         // Line-of-sight elevation
+  rangeKm: 620.0,             // Slant range
+  rangeRateKmS: 0.12,         // Range rate
+  dopplerHz: -4680,           // Observed Doppler shift
 });
 
-console.log("时间锚校验哈希:", anchor.timeAnchorDigestHex);
-console.log("相对论膨胀系数:", anchor.dilationFactor);
+console.log("Time Anchor Digest (Keccak256):", anchor.timeAnchorDigestHex);
+console.log("Clock Dilation Factor:", anchor.dilationFactor);
 ```
-
-### 3. 应用场景
-- **DeFi 预言机时间防护**：将 `anchor.timeAnchorDigestHex` 随价格喂价一并上链，防范假时间戳套利。
-- **高频订单撮合**：利用多普勒斜率与轨道几何锁定微秒级物理先后顺序。
 
 ---
 
-## 三、功能 2：链上双签罚没与悬赏 (Equivocation Slashing)
+## 3. On-Chain Equivocation Slashing & Bounty Hunting
 
-### 1. 机制与收益
-若某个中继节点（Operator）在**同一秒内**对相互矛盾的卫星数据进行了两次签名（例如声称此时连接了卫星 A，又同时签名连接了卫星 B）：
-- 任何人（Watchtower / 仲裁者 / 社区用户）都可以捕获这两个签名。
-- 组装成一份零争议的作恶证明。
-- 提交至链上智能合约 `SkyRelayBond.sol` 的 `slashEquivocation(...)` 方法。
-- **作恶节点质押的所有 BNB 将被瞬间罚没清零**，其中 **10% ~ 50% 的罚金作为 Bounty（赏金）直接发放给提交者的钱包**！
+### 3.1 Mechanism & Economics
+To sign telemetry and earn protocol rewards, SkyRelay operators must bond BNB into the `SkyRelayBond.sol` contract.
 
-### 2. 自动化守卫脚本示例 (Watchtower)
+If a rogue operator signs two contradictory spatial attestations for the exact same station-second (e.g., claiming to track two different satellites simultaneously, or falsifying Doppler metrics):
+1. **Detection**: Any watcher node detects the contradiction off-chain (zero gas cost).
+2. **Proof Assembly**: The watcher packages the two signed EIP-712 digests into an `EquivocationProof`.
+3. **Execution**: The watcher submits `slashEquivocation(...)` on BNB Chain.
+4. **Slashing & Bounty**: The rogue operator's bonded BNB is slashed to zero. The watcher receives `reporterBountyBps` (10%–50% of the slashed bond) **instantly in the same transaction as pure BNB profit**.
+
+### 3.2 Automated Watchtower Bot Example
 
 ```typescript
 import {
@@ -93,65 +106,64 @@ import {
 } from "@skyrelay/core";
 import { ethers } from "ethers";
 
-// 合约 EIP-712 域
-const domain: Eip712Domain = {
-  chainId: 56, // BNB Smart Chain 主网 (测试网为 97)
-  verifyingContract: "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC", // SkyRelayBeacon 合约地址
+const DOMAIN: Eip712Domain = {
+  chainId: 56, // BNB Smart Chain Mainnet (97 for Testnet)
+  verifyingContract: "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC", // SkyRelayBeacon
 };
 
-// 假设监听到了来自同一节点 operator 在同一 timestamp 下的两个冲突证明
-const attestationA: SkyRelayAttestation = { /* ... 第一个数据包 ... */ };
-const signatureA = "0x..." as `0x${string}`;
+async function inspectIncomingPair(
+  attA: SkyRelayAttestation,
+  sigA: `0x${string}`,
+  attB: SkyRelayAttestation,
+  sigB: `0x${string}`
+) {
+  // 1. Off-chain zero-gas evaluation
+  const result = evaluateEquivocation(attA, sigA, attB, sigB, DOMAIN);
 
-const attestationB: SkyRelayAttestation = { /* ... 冲突的第二个数据包 ... */ };
-const signatureB = "0x..." as `0x${string}`;
+  if (result.isSlashable && result.proof) {
+    console.log(`🚨 Equivocation detected from operator: ${result.proof.operator}`);
 
-// 1. 本地免 Gas 评估是否构成双签
-const evalResult = evaluateEquivocation(attestationA, signatureA, attestationB, signatureB, domain);
+    // 2. Format on-chain calldata
+    const call = formatSlashEquivocationCall(result.proof);
 
-if (evalResult.isSlashable && evalResult.proof) {
-  console.log(`🚨 捕获到作恶节点: ${evalResult.proof.operator}`);
-  
-  // 2. 格式化链上交易参数
-  const slashTxData = formatSlashEquivocationCall(evalResult.proof);
+    // 3. Submit transaction to claim the BNB bounty
+    const provider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/");
+    const signer = new ethers.Wallet(process.env.WATCHER_PRIVATE_KEY!, provider);
 
-  // 3. 发送交易领取罚金赏金
-  const provider = new ethers.JsonRpcProvider("https://bsc-dataseed.binance.org/");
-  const wallet = new ethers.Wallet(process.env.WATCHER_PRIVATE_KEY!, provider);
-  
-  const bondContract = new ethers.Contract(
-    "0xYourSkyRelayBondContractAddress",
-    [
-      "function slashEquivocation(tuple(address operator, bytes32 telemetryHash, bytes32 catalogHash, uint32 noradId, int32 elevationMilliDeg, int32 dopplerHz, int32 snrMilliDb, uint32 asn, uint64 timestamp) a, bytes sigA, tuple(address operator, bytes32 telemetryHash, bytes32 catalogHash, uint32 noradId, int32 elevationMilliDeg, int32 dopplerHz, int32 snrMilliDb, uint32 asn, uint64 timestamp) b, bytes sigB) external"
-    ],
-    wallet
-  );
+    const bondContract = new ethers.Contract(
+      "0xSkyRelayBondAddress",
+      [
+        "function slashEquivocation(tuple(address operator, bytes32 telemetryHash, bytes32 catalogHash, uint32 noradId, int32 elevationMilliDeg, int32 dopplerHz, int32 snrMilliDb, uint32 asn, uint64 timestamp) a, bytes sigA, tuple(address operator, bytes32 telemetryHash, bytes32 catalogHash, uint32 noradId, int32 elevationMilliDeg, int32 dopplerHz, int32 snrMilliDb, uint32 asn, uint64 timestamp) b, bytes sigB) external"
+      ],
+      signer
+    );
 
-  const tx = await bondContract.slashEquivocation(
-    slashTxData.args[0],
-    slashTxData.args[1],
-    slashTxData.args[2],
-    slashTxData.args[3]
-  );
-  console.log(`⚡️ 罚没交易已发送，交易哈希: ${tx.hash}`);
-  const receipt = await tx.wait();
-  console.log("🎉 罚没成功！赏金 BNB 已入账。");
+    const tx = await bondContract.slashEquivocation(
+      call.args[0],
+      call.args[1],
+      call.args[2],
+      call.args[3]
+    );
+
+    console.log(`⚡️ Slashing transaction submitted: ${tx.hash}`);
+    const receipt = await tx.wait();
+    console.log("🎉 Slashing confirmed! BNB Bounty received in your wallet.");
+  }
 }
 ```
 
 ---
 
-## 四、功能 3：自主 AI 空间网关 (Autonomous AI Space Gateway)
+## 4. Autonomous AI Space Invariant Gateway
 
-### 1. 为什么 AI Agent 需要此功能？
-在 BNB Chain 上运行的 Autonomous Agent（无论是社交 Agent、投资决策 Agent 还是链上博弈 Agent）受限于链上封闭的虚拟环境，容易遭遇幻觉或被恶意的外部 API 投毒。
+### 4.1 Grounding On-Chain AI in Physical Reality
+Autonomous AI agents deployed on BNB Chain (e.g., ElizaOS agents, autonomous DeFi risk managers, algorithmic gaming bots) are traditionally trapped inside synthetic, easily-manipulated software environments.
 
-`AutonomousAIGateway` 允许 AI 智能体接入真实的物理宇宙常数：
-- 获取特定地理基准站上空实时的天顶卫星轨道几何参数。
-- 提取由多个地面站聚合生成的**不可预测、不可偏倚的物理空间真随机熵（Entropy Seed）**。
-- 将物理状态直接作为上下文注入给 LLM，实现基于物理现实的确定性决策。
+`AutonomousAIGateway` bridges autonomous agents directly to physical space:
+- **Physical Geometry Telemetry**: Real-time azimuth, elevation, Doppler shift, and line-of-sight status for any satellite pass over any reference ground station.
+- **Physical Space Entropy**: Generating unbiasable, unmanipulable 256-bit randomness seeds extracted from physical multi-station microwave downlinks.
 
-### 2. AI 智能体调用示例
+### 4.2 Autonomous Agent Integration Example
 
 ```typescript
 import {
@@ -162,66 +174,73 @@ import {
 } from "@skyrelay/core";
 import * as fs from "node:fs";
 
-// 1. 初始化网关 (载入经过权威哈希校验的星历表)
-const tleRaw = fs.readFileSync("./vectors/tle/starlink-1008.txt", "utf8");
-const catalog: Tle[] = [parse3le(tleRaw)];
-
+// 1. Initialize Gateway with verified TLE catalog
+const rawTle = fs.readFileSync("./vectors/tle/starlink-1008.txt", "utf8");
+const catalog: Tle[] = [parse3le(rawTle)];
 const aiGateway = new AutonomousAIGateway(catalog);
 
-// 2. AI 查询物理空间状态
+// 2. Query real-time physical space telemetry for an AI agent's decision loop
 const spaceState = aiGateway.querySpaceState({
-  noradId: 47352,                     // 目标星链卫星
+  noradId: 47352,                     // Target satellite
   timestampSec: Math.floor(Date.now() / 1000),
-  station: BASELINE_STATIONS.VALENTIA_01, // 爱尔兰瓦伦西亚基准站
+  station: BASELINE_STATIONS.VALENTIA_01, // Valentia Island, Ireland
 });
 
-console.log(`🤖 AI 空间遥测状态:
-  - 卫星代号: ${spaceState.satelliteName}
-  - 是否在天顶视界: ${spaceState.isOverhead}
-  - 仰角 / 方位角: ${spaceState.elevationDeg}° / ${spaceState.azimuthDeg}°
-  - 地星斜距: ${spaceState.slantRangeKm} km
-  - 相对论时间锚哈希: ${spaceState.relativisticTimeAnchor.timeAnchorDigestHex}
+console.log(`🤖 AI Agent Space Context:
+  Satellite: ${spaceState.satelliteName}
+  Visible Overhead: ${spaceState.isOverhead}
+  Elevation: ${spaceState.elevationDeg}° | Azimuth: ${spaceState.azimuthDeg}°
+  Slant Range: ${spaceState.slantRangeKm} km
+  Relativistic Time Anchor: ${spaceState.relativisticTimeAnchor.timeAnchorDigestHex}
 `);
 
-// 3. AI 申请多节点物理真随机熵 (用于随机博弈、密钥派生或无偏见裁决)
-const round = 10086n;
-const contributorSecrets = [
-  "0x1111111111111111111111111111111111111111111111111111111111111111",
-  "0x2222222222222222222222222222222222222222222222222222222222222222",
-];
-
+// 3. Resolve verified physical entropy seeds for non-deterministic AI decisions
 const entropy = aiGateway.resolvePhysicalEntropy({
-  round,
-  revealedSecrets: contributorSecrets,
+  round: 10086n,
+  revealedSecrets: [
+    "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "0x5555555555555555555555555555555555555555555555555555555555555555",
+  ],
 });
 
-console.log("物理真随机种子 (256-bit Seed):", entropy.seed);
-// 输出无法被链上矿工预测的真实宇宙熵
+console.log("Physical Space Randomness Seed (256-bit):", entropy.seed);
 ```
 
 ---
 
-## 五、完整测试与校验命令
+## 5. Running Verification Tests
 
-本仓库所有新增模块均配有完整的单元测试与端到端模拟测试：
+You can verify all three modules locally using the built-in test suites:
 
 ```bash
-# 运行全部 83 项 TypeScript 核心协议测试
+# Clone the repository
+git clone https://github.com/SkyRelay/protocol.git
+cd protocol
+
+# Install dependencies
+pnpm install
+
+# Run all 83 TypeScript core protocol tests
 pnpm --filter @skyrelay/core test
 
-# 运行特定测试
+# Run individual test suites
 node --test --loader ts-node/esm packages/core/test/relativity.test.ts
 node --test --loader ts-node/esm packages/core/test/slashing.test.ts
 node --test --loader ts-node/esm packages/core/test/ai-gateway.test.ts
 
-# 运行 Solidity 链上合约测试 (122 项测试)
+# Run all 122 Foundry Solidity smart contract tests
 pnpm --filter contracts test
 ```
 
 ---
 
-## 总结
+## 6. Summary of Exported APIs
 
-- **DeFi 开发者**：使用 `createRelativisticTimeAnchor` 防范 MEV 与时间戳欺诈。
-- **安全节点 / 猎人**：运行 `evaluateEquivocation` 守卫网络，抓捕违规中继并赚取 BNB 赏金。
-- **AI 开发者**：通过 `AutonomousAIGateway` 为 AI Agent 赋予对物理世界、天体几何与宇宙熵的真实感知力。
+| Module | Export | Purpose |
+| :--- | :--- | :--- |
+| **Relativity** | `netRelativisticDilation(v, h)` | Computes net Special + General relativity clock drift in $\mu\text{s/day}$ |
+| **Relativity** | `tcaDopplerRateHzS(v, h, f)` | Computes Doppler inflection rate ($\text{Hz/s}$) at zero-crossing |
+| **Relativity** | `createRelativisticTimeAnchor(opts)` | Builds verifiable anti-MEV physical time anchor struct |
+| **Slashing** | `evaluateEquivocation(a, sA, b, sB, d)` | Checks whether two signed attestations constitute a slashable double-signature |
+| **Slashing** | `formatSlashEquivocationCall(proof)` | Prepares canonical calldata for `SkyRelayBond.slashEquivocation` |
+| **AI Gateway** | `AutonomousAIGateway` | Query physical space coordinates & extract unbiasable entropy for AI agents |
