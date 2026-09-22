@@ -2,7 +2,7 @@
 
 **Starlink user-terminal telemetry → physical features → EIP-712 → BNB Smart Chain.**
 
-[skyrelay.link](https://skyrelay.link) · [github.com/SkyRelay/protocol](https://github.com/SkyRelay/protocol)
+[skyrelay.link](https://skyrelay.link) · [Node Portal](https://skyrelay.link/nodes) · [Operator Guide (Web)](https://skyrelay.link/nodes/guide) · [github.com/SkyRelay/protocol](https://github.com/SkyRelay/protocol)
 
 An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS14593/AS45700 filtering, Ethereum Keccak-256, and a Solidity verifier. No dish required. No Postgres, no Docker, no cloud.
 
@@ -15,6 +15,7 @@ An open-source **feasibility proof**: in-repo SGP4 (WGS-72), Ku-band Doppler, AS
 
 ## Contents
 
+- [📖 Node Operator Guide · Channel A (BYOD)](docs/NODE-OPERATOR-GUIDE.md)
 - [How Starlink and BNB Smart Chain relate](#how-starlink-and-bnb-smart-chain-relate)
 - [Quickstart](#quickstart)
 - [What that one command prints](#what-that-one-command-prints)
