@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   abiEncodeCommitment,
-  abiEncodeFinalize,
   accumulateEntropySeeds,
   calculateRound,
   calculateTargetCommitRound,
@@ -11,7 +10,7 @@ import {
   derivePhysicalSecret,
   verifyEntropyCommitment,
 } from "../src/entropy/extractor.ts";
-import { keccak256Hex, hexToBytes, bytesToHex } from "../src/crypto/keccak.ts";
+import { bytesToHex } from "../src/crypto/keccak.ts";
 
 test("derivePhysicalSecret generates unique deterministic 32-byte secrets from RF physical parameters", () => {
   const operator = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" as `0x${string}`;

@@ -9,15 +9,7 @@ import {
   TriangulationError,
   TRIANGULATION_MAX_FDOA_RESIDUAL_HZ,
 } from "../src/orbit/triangulation.ts";
-import { parse3le } from "../src/orbit/tle.ts";
-import { initSgp4, propagate } from "../src/orbit/sgp4.ts";
-import { epochToJulian, gstime, julianDate, temeToEcef, temeVelocityToEcef } from "../src/orbit/coords.ts";
 import type { Vec3 } from "../src/orbit/sgp4.ts";
-import { KU_DOWNLINK_HZ } from "../src/orbit/constants.ts";
-
-const SAMPLE_STARLINK_TLE = `STARLINK-31042
-1 58921U 24026B   24040.50000000  .00001234  00000-0  12345-3 0  9999
-2 58921  53.0543 120.1234 0001452  85.1234 274.9876 15.06412345 12345`;
 
 test("baseline distances between ground stations reflect physical European geography", () => {
   const dValentiaGoonhilly = stationBaselineDistanceKm(

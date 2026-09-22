@@ -1,5 +1,4 @@
 import {
-  DEG2RAD,
   KU_DOWNLINK_HZ,
   RAD2DEG,
   SPEED_OF_LIGHT_KMS,
