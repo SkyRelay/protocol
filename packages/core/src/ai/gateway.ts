@@ -1,5 +1,5 @@
 import type { Station } from "../orbit/pass.ts";
-import { observe, matchBoresight } from "../orbit/pass.ts";
+import { observe } from "../orbit/pass.ts";
 import type { Tle } from "../orbit/tle.ts";
 import {
   createRelativisticTimeAnchor,
