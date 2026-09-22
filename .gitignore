@@ -12,3 +12,4 @@ coverage/
 .vscode/
 contracts/out/
 contracts/cache/
+output/

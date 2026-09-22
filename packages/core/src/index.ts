@@ -30,6 +30,21 @@ export {
 } from "./orbit/pass.ts";
 export type { Station, Overhead, BoresightSighting } from "./orbit/pass.ts";
 export { dopplerHz } from "./orbit/doppler.ts";
+export {
+  TRIANGULATION_MAX_FDOA_RESIDUAL_HZ,
+  SINGLE_STATION_TOLERANCE_HZ,
+  BASELINE_STATIONS,
+  TriangulationError,
+  stationBaselineDistanceKm,
+  stationLineOfSight,
+  computeBaselinePair,
+  runTriangulationQuorum,
+} from "./orbit/triangulation.ts";
+export type {
+  TriangulationObservation,
+  BaselinePair,
+  TriangulationReport,
+} from "./orbit/triangulation.ts";
 
 export { parseCapture } from "./telemetry/parse.ts";
 export type { SkyCapture, DishStatus, DishDiagnostics, Egress } from "./telemetry/parse.ts";
