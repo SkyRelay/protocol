@@ -3,7 +3,6 @@ import {
   SPEED_OF_LIGHT_KMS,
   WGS72,
 } from "./constants.ts";
-import type { BoresightSighting, Station } from "./pass.ts";
 
 /**
  * Standard gravitational parameter for Earth (km^3 / s^2).
