@@ -139,3 +139,30 @@ test("the committed quorum fixture matches what the pipeline produces", () => {
   assert.equal(committed.timestamp, q.timestamp);
   assert.equal(committed.catalogHash, q.catalogHash);
 });
+
+test("quorum automatically performs multi-station triangulation and verifies FDOA residual", () => {
+  const q = quorum();
+  assert.ok(q.triangulation, "triangulation report must be present");
+  assert.equal(q.triangulation.stationCount, 3);
+  assert.equal(q.triangulation.isTriangulationVerified, true);
+  // Differential Doppler residual across Atlantic stations is sub-Hertz
+  assert.ok(q.triangulation.maxFdoaResidualHz < 3.0, `max residual: ${q.triangulation.maxFdoaResidualHz} Hz`);
+  assert.ok(q.triangulation.precisionGainFactor > 4.0, "precision gain factor must be > 4x");
+});
+
+test("quorum rejects member if differential Doppler residual exceeds threshold", () => {
+  const m1 = member("connected-001");
+  const m2 = member("quorum-goonhilly-007");
+
+  // If we set a very tight impossible tolerance (e.g. 0.001 Hz), triangulation must throw TriangulationError
+  assert.throws(
+    () =>
+      runQuorum({
+        members: [m1, m2],
+        catalog: CATALOG,
+        domain: DOMAIN,
+        triangulationToleranceHz: 0.001,
+      }),
+    /exceeds tolerance/,
+  );
+});

@@ -59,6 +59,19 @@ export { runQuorum } from "./quorum.ts";
 export { checkPassShape, runPassTrack } from "./track.ts";
 export type { PassSample, PassShape, PassTrackInput, PassTrackOutput } from "./track.ts";
 export type { QuorumInput, QuorumMember, QuorumOutput } from "./quorum.ts";
+
+export {
+  derivePhysicalSecret,
+  abiEncodeCommitment,
+  computeEntropyCommitment,
+  verifyEntropyCommitment,
+  accumulateEntropySeeds,
+  abiEncodeFinalize,
+  computeFinalizedSeed,
+  calculateRound,
+  calculateTargetCommitRound,
+} from "./entropy/extractor.ts";
+export type { PhysicalEntropyInputs } from "./entropy/extractor.ts";
 export {
   ALLOWED_ASN,
   STARLINK_ASN,

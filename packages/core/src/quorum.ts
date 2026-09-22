@@ -2,6 +2,14 @@ import { runPipeline, type PipelineOutput } from "./pipeline.ts";
 import type { Eip712Domain } from "./crypto/eip712.ts";
 import type { Station } from "./orbit/pass.ts";
 import type { Tle } from "./orbit/tle.ts";
+import { epochToJulian, gstime, julianDate, temeToEcef, temeVelocityToEcef } from "./orbit/coords.ts";
+import { initSgp4, propagate } from "./orbit/sgp4.ts";
+import {
+  runTriangulationQuorum,
+  TRIANGULATION_MAX_FDOA_RESIDUAL_HZ,
+  type TriangulationObservation,
+  type TriangulationReport,
+} from "./orbit/triangulation.ts";
 
 export type QuorumMember = {
   capture: unknown;
@@ -16,6 +24,8 @@ export type QuorumInput = {
   catalog: Tle[];
   domain: Eip712Domain;
   boresightToleranceDeg?: number;
+  /** Optional differential Doppler residual tolerance in Hz (default: 3.0 Hz). Set 0 to disable triangulation. */
+  triangulationToleranceHz?: number;
 };
 
 export type QuorumOutput = {
@@ -28,6 +38,8 @@ export type QuorumOutput = {
   reports: PipelineOutput[];
   /** Worst per-station pointing residual in the set. */
   worstBoresightResidualDeg: number;
+  /** Multi-station long-baseline triangulation and differential Doppler geometric report. */
+  triangulation?: TriangulationReport;
 };
 
 /**
@@ -94,11 +106,51 @@ export function runQuorum(input: QuorumInput): QuorumOutput {
     operators.add(operator);
   }
 
+  let triangulation: TriangulationReport | undefined;
+  if (input.triangulationToleranceHz !== 0) {
+    const tle = input.catalog.find((t) => t.noradId === first.attestation.noradId);
+    if (tle) {
+      const epoch = epochToJulian(tle.epochYear, tle.epochDay);
+      const when = new Date(first.attestation.timestamp * 1000);
+      const jdNow = julianDate(
+        when.getUTCFullYear(),
+        when.getUTCMonth() + 1,
+        when.getUTCDate(),
+        when.getUTCHours(),
+        when.getUTCMinutes(),
+        when.getUTCSeconds() + when.getUTCMilliseconds() / 1000,
+      );
+      const tsinceMin = (jdNow - (epoch.jd + epoch.fr)) * 1440;
+      const rv = propagate(initSgp4(tle), tsinceMin);
+      const gmst = gstime(jdNow);
+      const satEcefKm = temeToEcef(rv.positionKm, gmst);
+      const satVelEcefKmS = temeVelocityToEcef(rv.velocityKmS, satEcefKm, gmst);
+
+      const observations: TriangulationObservation[] = members.map((m, idx) => ({
+        station: m.station,
+        observedDopplerHz: reports[idx]!.attestation.dopplerHz,
+        azimuthDeg: reports[idx]!.sighting.azimuthDeg,
+        elevationDeg: reports[idx]!.sighting.elevationDeg,
+      }));
+
+      const maxTol = input.triangulationToleranceHz ?? TRIANGULATION_MAX_FDOA_RESIDUAL_HZ;
+      triangulation = runTriangulationQuorum({
+        noradId: first.attestation.noradId,
+        timestamp: first.attestation.timestamp,
+        satEcefKm,
+        satVelEcefKmS,
+        observations,
+        maxToleranceHz: maxTol,
+      });
+    }
+  }
+
   return {
     noradId: first.attestation.noradId,
     timestamp: first.attestation.timestamp,
     catalogHash: first.catalogHash,
     reports,
     worstBoresightResidualDeg: Math.max(...reports.map((r) => r.sighting.boresightResidualDeg)),
+    triangulation,
   };
 }
