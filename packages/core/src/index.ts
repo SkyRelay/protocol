@@ -91,6 +91,13 @@ export type { EquivocationProof } from "./crypto/slashing.ts";
 
 export { AutonomousAIGateway } from "./ai/gateway.ts";
 export type { AISpaceQuery, AISpaceState } from "./ai/gateway.ts";
+export { AntiMevSwapEngine } from "./dex/fair-swap.ts";
+export type {
+  ProtectedSwapOrder,
+  SwapExecutionResult,
+  PoolState,
+  BatchExecutionSummary,
+} from "./dex/fair-swap.ts";
 export {
   ALLOWED_ASN,
   STARLINK_ASN,
