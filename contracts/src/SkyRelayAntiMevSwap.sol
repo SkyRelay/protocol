@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {ISkyRelay} from "./interfaces/ISkyRelay.sol";
+
 interface IERC20Minimal {
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
@@ -17,6 +19,7 @@ interface IERC20Minimal {
 ///      strict physical microsecond sequencing derived from low-Earth orbit satellites.
 contract SkyRelayAntiMevSwap {
     struct RelativisticTimeAnchor {
+        uint256 beaconId;
         uint32 noradId;
         uint64 timestampSec;
         uint32 subsecondMicros; // 0..999,999
@@ -132,16 +135,24 @@ contract SkyRelayAntiMevSwap {
         if (anchor.timestampSec > block.timestamp + 5) revert FutureTimeAnchor();
         if (block.timestamp > anchor.timestampSec + maxAnchorAgeSec) revert ExpiredTimeAnchor();
 
-        bytes32 expected = keccak256(
-            abi.encodePacked(
-                anchor.noradId,
-                anchor.timestampSec,
-                anchor.subsecondMicros,
-                anchor.tcaDopplerSlopeHzS,
-                anchor.netDriftUsPerDay
-            )
-        );
-        if (anchor.anchorDigest != expected) revert InvalidAnchorDigest();
+        if (beacon != address(0)) {
+            ISkyRelay.BeaconSummary memory summary = ISkyRelay(beacon).getBeacon(anchor.beaconId);
+            if (summary.timestamp == 0) revert InvalidAnchorDigest();
+            if (summary.noradId != anchor.noradId) revert InvalidAnchorDigest();
+            if (summary.timestamp != anchor.timestampSec) revert ExpiredTimeAnchor();
+            if (summary.catalogHash != anchor.anchorDigest) revert InvalidAnchorDigest();
+        } else {
+            bytes32 expected = keccak256(
+                abi.encodePacked(
+                    anchor.noradId,
+                    anchor.timestampSec,
+                    anchor.subsecondMicros,
+                    anchor.tcaDopplerSlopeHzS,
+                    anchor.netDriftUsPerDay
+                )
+            );
+            if (anchor.anchorDigest != expected) revert InvalidAnchorDigest();
+        }
 
         return uint128(anchor.timestampSec) * 1_000_000 + uint128(anchor.subsecondMicros);
     }

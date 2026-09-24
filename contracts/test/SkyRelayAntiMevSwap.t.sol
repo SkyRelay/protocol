@@ -124,6 +124,7 @@ contract SkyRelayAntiMevSwapTest is Test {
             abi.encodePacked(NORAD_ID, tsSec, micros, slope, drift)
         );
         return SkyRelayAntiMevSwap.RelativisticTimeAnchor({
+            beaconId: 0,
             noradId: NORAD_ID,
             timestampSec: tsSec,
             subsecondMicros: micros,
@@ -344,4 +345,108 @@ contract SkyRelayAntiMevSwapTest is Test {
         assertEq(executed, 2);
         assertEq(pool.lastPhysicalTimestampMicros(), uint128(currentTs) * 1_000_000 + 150_000);
     }
+
+    function test_swapWithOnChainBeaconVerification() public {
+        MockSkyRelayBeacon mockBeacon = new MockSkyRelayBeacon();
+        SkyRelayAntiMevSwap poolWithBeacon = new SkyRelayAntiMevSwap(
+            address(tokenA),
+            address(tokenB),
+            address(mockBeacon),
+            30,
+            60
+        );
+
+        tokenA.mint(alice, 100 ether);
+        tokenB.mint(alice, 100_000 ether);
+        vm.startPrank(alice);
+        tokenA.approve(address(poolWithBeacon), type(uint256).max);
+        tokenB.approve(address(poolWithBeacon), type(uint256).max);
+        poolWithBeacon.addLiquidity(100 ether, 100_000 ether, 1, alice);
+        vm.stopPrank();
+
+        uint64 currentTs = uint64(block.timestamp);
+        bytes32 testCatalogHash = keccak256("TEST_CATALOG_V1");
+
+        // Register authentic beacon on mock beacon contract
+        mockBeacon.recordMockBeacon(1, NORAD_ID, currentTs, testCatalogHash);
+
+        SkyRelayAntiMevSwap.RelativisticTimeAnchor memory authenticAnchor = SkyRelayAntiMevSwap.RelativisticTimeAnchor({
+            beaconId: 1,
+            noradId: NORAD_ID,
+            timestampSec: currentTs,
+            subsecondMicros: 420_000,
+            tcaDopplerSlopeHzS: TCA_SLOPE,
+            netDriftUsPerDay: REL_DRIFT,
+            anchorDigest: testCatalogHash
+        });
+
+        vm.startPrank(victim);
+        tokenA.approve(address(poolWithBeacon), type(uint256).max);
+        tokenB.approve(address(poolWithBeacon), type(uint256).max);
+        uint256 out = poolWithBeacon.swapExactTokensWithAnchor(
+            poolWithBeacon.token0(),
+            poolWithBeacon.token1(),
+            1 ether,
+            1,
+            victim,
+            authenticAnchor
+        );
+        vm.stopPrank();
+        assertGt(out, 0);
+
+        // Attempt forged/unrecorded beaconId 999
+        SkyRelayAntiMevSwap.RelativisticTimeAnchor memory forgedAnchor = authenticAnchor;
+        forgedAnchor.beaconId = 999;
+
+        address p0 = poolWithBeacon.token0();
+        address p1 = poolWithBeacon.token1();
+
+        vm.startPrank(mevBot);
+        tokenA.approve(address(poolWithBeacon), type(uint256).max);
+        tokenB.approve(address(poolWithBeacon), type(uint256).max);
+        vm.expectRevert(SkyRelayAntiMevSwap.InvalidAnchorDigest.selector);
+        poolWithBeacon.swapExactTokensWithAnchor(
+            p0,
+            p1,
+            1 ether,
+            1,
+            mevBot,
+            forgedAnchor
+        );
+        vm.stopPrank();
+    }
 }
+
+contract MockSkyRelayBeacon {
+    struct BeaconSummary {
+        uint32 noradId;
+        uint64 timestamp;
+        uint8 quorum;
+        bytes32 catalogHash;
+        bytes32 signersHash;
+    }
+
+    mapping(uint256 => BeaconSummary) public beacons;
+    uint256 public totalBeacons;
+
+    function recordMockBeacon(
+        uint256 beaconId,
+        uint32 noradId,
+        uint64 timestamp,
+        bytes32 catalogHash
+    ) external {
+        beacons[beaconId] = BeaconSummary({
+            noradId: noradId,
+            timestamp: timestamp,
+            quorum: 3,
+            catalogHash: catalogHash,
+            signersHash: keccak256("SIGNERS")
+        });
+        if (beaconId >= totalBeacons) totalBeacons = beaconId;
+    }
+
+    function getBeacon(uint256 beaconId) external view returns (BeaconSummary memory) {
+        return beacons[beaconId];
+    }
+}
+
