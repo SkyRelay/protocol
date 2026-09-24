@@ -64,20 +64,26 @@ contract SkyRelayAntiMevSwapTest is Test {
     address internal alice = makeAddr("alice");
     address internal victim = makeAddr("victim");
     address internal mevBot = makeAddr("mevBot");
+    MockSkyRelayBeacon internal mockBeacon;
 
     uint32 internal constant NORAD_ID = 47352;
     int32 internal constant TCA_SLOPE = -4050; // -4050 Hz/s
     int32 internal constant REL_DRIFT = -22; // -22 us/day
+    bytes32 internal constant CATALOG_HASH = keccak256("TEST_CATALOG_V1");
 
     function setUp() public {
         tokenA = new MockToken("Wrapped BNB", "WBNB");
         tokenB = new MockToken("SkyRelay Protocol", "SKYRELAY");
+        mockBeacon = new MockSkyRelayBeacon();
 
-        // Deploy pool with 30 bps (0.3%) fee, 60s max anchor age
+        // Record a valid base beacon at current block timestamp
+        mockBeacon.recordMockBeacon(1, NORAD_ID, uint64(block.timestamp), CATALOG_HASH);
+
+        // Deploy pool with 30 bps (0.3%) fee, 60s max anchor age, wired to mockBeacon
         pool = new SkyRelayAntiMevSwap(
             address(tokenA),
             address(tokenB),
-            address(0),
+            address(mockBeacon),
             30,
             60
         );
@@ -119,18 +125,16 @@ contract SkyRelayAntiMevSwapTest is Test {
         uint32 micros,
         int32 slope,
         int32 drift
-    ) internal pure returns (SkyRelayAntiMevSwap.RelativisticTimeAnchor memory) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(NORAD_ID, tsSec, micros, slope, drift)
-        );
+    ) internal returns (SkyRelayAntiMevSwap.RelativisticTimeAnchor memory) {
+        mockBeacon.recordMockBeacon(1, NORAD_ID, tsSec, CATALOG_HASH);
         return SkyRelayAntiMevSwap.RelativisticTimeAnchor({
-            beaconId: 0,
+            beaconId: 1,
             noradId: NORAD_ID,
             timestampSec: tsSec,
             subsecondMicros: micros,
             tcaDopplerSlopeHzS: slope,
             netDriftUsPerDay: drift,
-            anchorDigest: digest
+            anchorDigest: CATALOG_HASH
         });
     }
 

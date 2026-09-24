@@ -18,21 +18,30 @@ contract OrbitalVesting {
     ISkyRelay public immutable skyRelay;
     IERC20Transferable public immutable token;
     address public immutable beneficiary;
-    address public immutable attesterOperator;
 
     uint64 public immutable startTimestamp;
+    uint64 public immutable minPassIntervalSec; // e.g. 5400 seconds (~90 mins per LEO orbit)
     uint256 public immutable totalAllocation;
     uint256 public immutable totalPassesRequired;
 
+    uint256 public passesCounted;
+    uint64 public lastCountedTimestamp;
     uint256 public totalClaimed;
 
     event VestingInitialized(
         address indexed token,
         address indexed beneficiary,
-        address indexed attesterOperator,
         uint256 totalAllocation,
         uint256 totalPassesRequired,
+        uint64 minPassIntervalSec,
         uint64 startTimestamp
+    );
+
+    event OrbitalPassAdvanced(
+        uint256 indexed beaconId,
+        uint32 noradId,
+        uint64 sightingTimestamp,
+        uint256 newPassCount
     );
 
     event TokensClaimed(
@@ -45,65 +54,76 @@ contract OrbitalVesting {
     error ZeroAddress();
     error ZeroAmount();
     error InvalidPassRequirement();
+    error InvalidBeacon();
+    error PassIntervalNotElapsed(uint64 elapsedSec, uint64 requiredSec);
+    error BeaconPrecedesStart(uint64 beaconTs, uint64 startTs);
+    error SightingTooOld(uint64 beaconTs, uint64 lastCountedTs);
     error NothingToClaim();
     error TransferFailed();
-    error Unauthorized();
 
     constructor(
         address skyRelayAddress,
         address tokenAddress,
         address beneficiaryAddress,
-        address operatorAddress,
         uint256 allocationAmount,
         uint256 passesRequired,
+        uint64 passIntervalSec,
         uint64 startTs
     ) {
         if (skyRelayAddress == address(0)) revert ZeroAddress();
         if (tokenAddress == address(0)) revert ZeroAddress();
         if (beneficiaryAddress == address(0)) revert ZeroAddress();
-        if (operatorAddress == address(0)) revert ZeroAddress();
         if (allocationAmount == 0) revert ZeroAmount();
         if (passesRequired == 0) revert InvalidPassRequirement();
 
         skyRelay = ISkyRelay(skyRelayAddress);
         token = IERC20Transferable(tokenAddress);
         beneficiary = beneficiaryAddress;
-        attesterOperator = operatorAddress;
         totalAllocation = allocationAmount;
         totalPassesRequired = passesRequired;
+        minPassIntervalSec = passIntervalSec == 0 ? 5400 : passIntervalSec; // Default 90 min LEO orbit
         startTimestamp = startTs == 0 ? uint64(block.timestamp) : startTs;
 
         emit VestingInitialized(
             tokenAddress,
             beneficiaryAddress,
-            operatorAddress,
             allocationAmount,
             passesRequired,
+            minPassIntervalSec,
             startTimestamp
         );
     }
 
-    /// @notice Returns the number of verified orbital passes recorded since startTimestamp.
-    function getRecordedPassCount() public view returns (uint256) {
-        uint64 currentTs = uint64(block.timestamp);
-        if (currentTs <= startTimestamp) return 0;
+    /// @notice Register a newly verified orbital beacon to advance the vesting clock.
+    /// @dev Prevents spamming: even if an attester floods 100 beacons simultaneously,
+    ///      only one beacon can be registered per minPassIntervalSec (~90 min).
+    function advancePass(uint256 beaconId) public {
+        ISkyRelay.BeaconSummary memory summary = skyRelay.getBeacon(beaconId);
+        if (summary.timestamp == 0) revert InvalidBeacon();
+        if (summary.timestamp < startTimestamp) revert BeaconPrecedesStart(summary.timestamp, startTimestamp);
 
-        // Window cannot exceed 366 days in a single call per SkyRelay protocol specification
-        uint64 windowEnd = currentTs;
-        if (windowEnd - startTimestamp > 365 days) {
-            windowEnd = startTimestamp + 365 days;
+        if (passesCounted == 0) {
+            lastCountedTimestamp = summary.timestamp;
+            passesCounted = 1;
+        } else {
+            if (summary.timestamp <= lastCountedTimestamp) revert SightingTooOld(summary.timestamp, lastCountedTimestamp);
+            uint64 elapsed = summary.timestamp - lastCountedTimestamp;
+            if (elapsed < minPassIntervalSec) {
+                revert PassIntervalNotElapsed(elapsed, minPassIntervalSec);
+            }
+            lastCountedTimestamp = summary.timestamp;
+            passesCounted += 1;
         }
 
-        return skyRelay.beaconCountInWindow(attesterOperator, startTimestamp, windowEnd);
+        emit OrbitalPassAdvanced(beaconId, summary.noradId, summary.timestamp, passesCounted);
     }
 
-    /// @notice Computes the total cumulative vested tokens unlocked by orbital passes.
+    /// @notice Computes the total cumulative vested tokens unlocked by recorded orbital passes.
     function vestedAmount() public view returns (uint256) {
-        uint256 passCount = getRecordedPassCount();
-        if (passCount >= totalPassesRequired) {
+        if (passesCounted >= totalPassesRequired) {
             return totalAllocation;
         }
-        return (totalAllocation * passCount) / totalPassesRequired;
+        return (totalAllocation * passesCounted) / totalPassesRequired;
     }
 
     /// @notice Computes the claimable tokens currently available for withdrawal.
@@ -113,17 +133,24 @@ contract OrbitalVesting {
         return vested - totalClaimed;
     }
 
+    /// @notice Advance vesting clock and release unlocked tokens in a single call.
+    function advanceAndClaim(uint256 beaconId) external returns (uint256 released) {
+        if (beaconId > 0) {
+            advancePass(beaconId);
+        }
+        return claim();
+    }
+
     /// @notice Release unlocked tokens to the beneficiary based on recorded orbital sightings.
-    function claim() external returns (uint256 released) {
+    function claim() public returns (uint256 released) {
         released = claimableAmount();
         if (released == 0) revert NothingToClaim();
 
         totalClaimed += released;
-        uint256 currentPasses = getRecordedPassCount();
 
         bool success = token.transfer(beneficiary, released);
         if (!success) revert TransferFailed();
 
-        emit TokensClaimed(beneficiary, released, totalClaimed, currentPasses);
+        emit TokensClaimed(beneficiary, released, totalClaimed, passesCounted);
     }
 }

@@ -102,7 +102,7 @@ contract SkyRelayAntiMevSwap {
         uint16 poolFeeBps,
         uint32 anchorMaxAge
     ) {
-        if (tokenA == address(0) || tokenB == address(0)) revert ZeroAddress();
+        if (tokenA == address(0) || tokenB == address(0) || beaconAddress == address(0)) revert ZeroAddress();
         if (tokenA == tokenB) revert IdenticalAddresses();
         if (poolFeeBps > 1000) revert InsufficientLiquidity(); // Max 10% fee
 
@@ -119,7 +119,7 @@ contract SkyRelayAntiMevSwap {
         maxAnchorAgeSec = anchorMaxAge == 0 ? 60 : anchorMaxAge;
     }
 
-    /// @notice Verify physical invariants of a Relativistic Time Anchor.
+    /// @notice Verify physical invariants of a Relativistic Time Anchor against the on-chain SkyRelay beacon ledger.
     function verifyTimeAnchor(RelativisticTimeAnchor calldata anchor) public view returns (uint128 physicalMicros) {
         if (anchor.noradId == 0) revert ZeroAddress();
         if (anchor.subsecondMicros >= 1_000_000) revert InvalidSubsecondOffset();
@@ -135,24 +135,11 @@ contract SkyRelayAntiMevSwap {
         if (anchor.timestampSec > block.timestamp + 5) revert FutureTimeAnchor();
         if (block.timestamp > anchor.timestampSec + maxAnchorAgeSec) revert ExpiredTimeAnchor();
 
-        if (beacon != address(0)) {
-            ISkyRelay.BeaconSummary memory summary = ISkyRelay(beacon).getBeacon(anchor.beaconId);
-            if (summary.timestamp == 0) revert InvalidAnchorDigest();
-            if (summary.noradId != anchor.noradId) revert InvalidAnchorDigest();
-            if (summary.timestamp != anchor.timestampSec) revert ExpiredTimeAnchor();
-            if (summary.catalogHash != anchor.anchorDigest) revert InvalidAnchorDigest();
-        } else {
-            bytes32 expected = keccak256(
-                abi.encodePacked(
-                    anchor.noradId,
-                    anchor.timestampSec,
-                    anchor.subsecondMicros,
-                    anchor.tcaDopplerSlopeHzS,
-                    anchor.netDriftUsPerDay
-                )
-            );
-            if (anchor.anchorDigest != expected) revert InvalidAnchorDigest();
-        }
+        ISkyRelay.BeaconSummary memory summary = ISkyRelay(beacon).getBeacon(anchor.beaconId);
+        if (summary.timestamp == 0) revert InvalidAnchorDigest();
+        if (summary.noradId != anchor.noradId) revert InvalidAnchorDigest();
+        if (summary.timestamp != anchor.timestampSec) revert ExpiredTimeAnchor();
+        if (summary.catalogHash != anchor.anchorDigest) revert InvalidAnchorDigest();
 
         return uint128(anchor.timestampSec) * 1_000_000 + uint128(anchor.subsecondMicros);
     }
