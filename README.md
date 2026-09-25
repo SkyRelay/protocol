@@ -300,9 +300,35 @@ uint256 n = relay.beaconCountInWindow(operator, fromTs, toTs);
 
 `beaconCountInWindow` sums UTC-day buckets of verified sightings, using the attestation timestamp (when the sighting happened), inclusive of both ends, and reverts if the span exceeds 366 days. Prefer `RECOMMENDED_WINDOW_DAYS` (30) on chain; split longer settlement into several claims.
 
-`MockCoverageEscrow` (`contracts/test/mock/`) is the worked example. A funder locks BNB for an operator and a window; after `toTs` the operator collects only if that count meets `minBeacons`, otherwise the funder refunds. It is a demonstration, not a product.
-
 An operator whose terminal relayed BSC transactions during a pass can say so, with `submitRelayClaim`. The caller passes the beacon's signer array so the contract can check it against the stored `signersHash` — the hot path records one hash instead of one slot per member. The chain verifies the *sighting* and the *signature*, and takes the operator's word for the routing. A transaction hash carries no route information. `wasClaimedSpaceRelayed` returning true means a bonded attester signed a statement that this transaction was relayed during a sighting the chain verified geometrically.
+
+### Live Mainnet Space Relay Claim (Block 123828040)
+
+On BSC Mainnet, Station 1 (`0x794948FF7F360f3EaeF6437B1b8687100CA43Ef7`) submitted the first verified on-chain Space Relay Claim on Beacon #1 (Tx: `0x93188fbe2b278ee88faca38a9d1e4b7c5482647bd772dc782e279a41f4f1ab8d`), binding the $SKYRELAY token address and genesis transaction.
+
+Verify directly with Foundry `cast`:
+```bash
+cast call 0x22CE651E6916EE6488CE75657D0Da66cA11B0dC1 \
+  "wasClaimedSpaceRelayed(bytes32,uint256,bytes32[])(bool,address,uint64,uint32)" \
+  0x0000000000000000000000001cde8ED6aa84468BfbEd56dEacC264C7C1bB7777 1 \
+  "[0x7108985c57173b22ffc3eef5dfdd0684f88eb2d1f92e212450892cfa76e9389f]" \
+  --rpc-url https://bsc-dataseed.binance.org
+```
+Returns: `true`, attester `0x7949...4Ef7`, timestamp, and NORAD ID `47887`.
+
+### Space Genesis for Launchpads (`FlapSpaceGenesis.sol`)
+
+`contracts/src/adapters/FlapSpaceGenesis.sol` provides read-only composability for Flap.sh and BSC token factories. When a token is minted or launched, it queries `getBeacon(latestBeaconId)` to atomically bind the active in-orbit satellite NORAD ID, elevation, and Doppler profile into the contract provenance record.
+
+```solidity
+import {FlapSpaceGenesis} from "src/adapters/FlapSpaceGenesis.sol";
+
+// Deploy and atomically bind to the current overhead Starlink pass
+address token = factory.createTokenWithSpaceGenesis("OrbitalMeme", "ORBIT");
+
+// Or bind an existing token created on Flap / Four.meme
+factory.bindSpaceGenesis(existingTokenAddress);
+```
 
 ## Bonds and equivocation
 
